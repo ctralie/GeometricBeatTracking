@@ -1,4 +1,4 @@
-function [ env, envf, SampleDelays, AOrig ] = getFilteredOnsets( X, Fs, NPCs )
+function [ env, envf, SampleDelays, AOrig, Y ] = getFilteredOnsets( X, Fs, NPCs )
     W = 250;
     NSines = 1;
     [~, env] = onsetenv(X, Fs);
@@ -11,6 +11,7 @@ function [ env, envf, SampleDelays, AOrig ] = getFilteredOnsets( X, Fs, NPCs )
     [~, idx] = max(AFFT, [], 1);
     [~, idx] = sort(idx);
     idx(1:2*NSines)
+    idx = 1:2;
     
     A = zeros(size(AOrig));
     A(:, idx(1:2*NSines)) = AOrig(:, idx(1:2*NSines));
