@@ -1,10 +1,17 @@
-init;
 filename = 'train5';
 soundfilename = sprintf('examples1/%s.wav', filename);
-[X, Fs] = audioread(soundfilename);
+[XAudio, Fs] = audioread(soundfilename);
 allbts = getGroundTruthBeats(sprintf('examples1/%s.txt', filename));
 
-[env, envf, SampleDelays, AOrig, Y] = getFilteredOnsets(X, Fs, 10);
+[~, envorig] = onsetenv(XAudio, Fs);
+W = 250;
+SampleDelays = (1:length(envorig))/W;
+[envfs, AOrig, Y] = getFilteredOnsets(envorig, W, 4, 10);
+
+envf = envfs{4};
+[~, idx] = findpeaks(envf);
+makeBeatsAudio(XAudio, Fs, SampleDelays(idx), sprintf('Results/%sbts.wav', filename))
+
 figure(1);
 clf;
 subplot(2, 1, 1);
@@ -25,6 +32,6 @@ title(sprintf('First %i Principal Components %s', k, filename));
 
 %Export for viewing in 2d function viewer
 X = [1:length(env); env(:)']';
-save(sprintf('%senv.mat', filename), 'Fs', 'SampleDelays', 'X', 'soundfilename');
+save(sprintf('Results/%senv.mat', filename), 'Fs', 'SampleDelays', 'X', 'soundfilename');
 X = [1:length(envf); envf(:)']';
-save(sprintf('%senvf.mat', filename), 'Fs', 'SampleDelays', 'X', 'soundfilename');
+save(sprintf('Results/%senvf.mat', filename), 'Fs', 'SampleDelays', 'X', 'soundfilename');
