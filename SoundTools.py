@@ -48,7 +48,7 @@ class BeatingSound(object):
     
     def getMFCCNoveltyFn(self, winSize, hopSize, pfmax):
         self.processSpecgram(winSize, hopSize, pfmax)
-        self.novFn = np.sum(np.abs(self.X[:, 1:] - self.X[:, 0:-1]), 0).flatten()
+        self.novFn = np.sum(np.max(self.X[:, 1:] - self.X[:, 0:-1], 0), 0).flatten()
     
     def getSampleDelay(self, i):
         if i == -1:
@@ -124,6 +124,24 @@ class BeatingSound(object):
             x = self.novFn[i:i+M]
             self.V += UTi[:, None].dot(x[None, :])
         return self.V
+    
+    #Find the nearest valid delay embedding only using certain principal components
+    #idxs is the indices of the principal components to use
+    def performDenoising(self, idxs):
+        N = len(self.novFn)
+        M = self.V.shape[1]
+        NPCs = self.V.shape[0]
+        U = self.Y[:, idxs]
+        W = U.shape[0]
+        V = self.V
+        S = np.eye(U.shape[1])
+        np.fill_diagonal(S, self.S[idxs])
+        res = np.zeros(N)
+        counts = np.zeros(N)
+        for i in range(W):
+            res[i:i+M] += (U[i, :].dot(S)).dot(V[idxs, :])
+            counts[i:i+M] += 1.0
+        return res/counts
         
 if __name__ == '__main__':
     s = BeatingSound()
