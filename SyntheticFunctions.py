@@ -29,6 +29,7 @@ def getSyntheticPulseTrainFreqAmpDrift(NSamples, TMin, TMax, AmpMin, AmpMax, noi
     g = np.exp(-(np.arange(-gaussWidth, gaussWidth+1, dtype=np.float64))**2/(2*gaussSigma**2))
     y = np.convolve(x, g, 'same')
     y = y + noiseSigma*np.random.randn(len(y))
+    #return (original pulse train, gaussian convolved noisy version)
     return (x, y)
 
 

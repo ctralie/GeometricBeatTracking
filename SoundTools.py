@@ -48,7 +48,9 @@ class BeatingSound(object):
     
     def getMFCCNoveltyFn(self, winSize, hopSize, pfmax):
         self.processSpecgram(winSize, hopSize, pfmax)
-        self.novFn = np.sum(np.max(self.X[:, 1:] - self.X[:, 0:-1], 0), 0).flatten()
+        diff = self.X[:, 1:] - self.X[:, 0:-1]
+        diff[diff < 0] = 0
+        self.novFn = np.sum(diff, 0).flatten()
     
     def getSampleDelay(self, i):
         if i == -1:

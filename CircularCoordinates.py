@@ -2,8 +2,13 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg as slinalg
 import matplotlib.pyplot as plt
+import prox_tv as ptv
+import time
 from SyntheticFunctions import *
 from SoundTools import *
+
+EIG1 = 1
+EIG2 = 2
 
 def SSMToBinary(D, Kappa):
     N = D.shape[0]
@@ -52,27 +57,45 @@ def plotAdjacencyEdgesPCA(D, A, s):
     plt.show()
 
 def plotEigenvectors(v, NEig):
-    NEig = 10
     k = int(np.ceil(np.sqrt(NEig)))
     for i in range(NEig):
         plt.subplot(k, k, i+1)
         plt.plot(v[:, i])
     plt.show()
 
-if __name__ == "__main__":
-    T = 300
-    NPCs = 10
-    noiseSigma = 0.1
-    gaussSigma = 3
-    Normalize = False
-    (_, x) = getSyntheticPulseTrainFreqAmpDrift(5000, T-30, T+30, 1, 1, noiseSigma, gaussSigma)
-    plt.plot(x)
+def plotCircularCoordinates(s, D, v, theta, onsets, gtOnsets):
+    plt.subplot(231)
+    plt.plot(s.novFn)
+    plt.title("Original Function")
+    
+    plt.subplot(232)
+    plt.imshow(D)
+    plt.title('SSM')
+    
+    plt.subplot(233)
+    plt.stem(onsets, np.ones(len(onsets)), 'b')
+    plt.hold(True)
+    if len(gtOnsets) > 0:
+        plt.stem(gtOnsets, 0.5*np.ones(len(gtOnsets)), 'r')
+    plt.title('Onsets')
+    
+    plt.subplot(234)
+    plt.plot(v[:, EIG1], 'b')
+    plt.hold(True)
+    plt.plot(v[:, EIG2], 'r')
+    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
+    
+    plt.subplot(235)
+    plt.plot(v[:, EIG1], v[:, EIG2])
+    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
+    
+    plt.subplot(236)
+    plt.plot(theta % 2*np.pi)
+    plt.title('Circular Coordinates')
     plt.show()
-    x = x - np.mean(x)
-    s = BeatingSound()
-    s.novFn = x
 
-    W = 200
+def getCircularCoordinates(s, W, NPCs, Normalize = True):
+    NEig = 16
     (U, S) = s.getSlidingWindowLeftSVD(W)
     SMat = np.eye(NPCs)
     np.fill_diagonal(SMat, S[0:NPCs])
@@ -87,7 +110,8 @@ if __name__ == "__main__":
     D = XSum[:, None] + XSum[None, :] - 2*(X.T.dot(X))
     
     #Compute spectral decomposition
-    A = SSMToBinaryMutual(D, 0.01)
+    #A = SSMToBinaryMutual(D, 0.02)
+    A = np.exp(-D*10)
     A[range(1, D.shape[0]), range(D.shape[0]-1)] = 1
     A[range(D.shape[0]-1), range(1, D.shape[0])] = 1
     #plotAdjacencyEdgesPCA(D, A, s)
@@ -101,33 +125,93 @@ if __name__ == "__main__":
     try:
         #http://stackoverflow.com/questions/12125952/scipys-sparse-eigsh-for-small-eigenvalues
         tic = time.time()
-        w, v = slinalg.eigsh(L, k=3, sigma = 0, which = 'LM')
+        w, v = slinalg.eigsh(L, k=NEig, sigma = 0, which = 'LM')
+        plotEigenvectors(v, NEig)
         toc = time.time()
         print "Time computing eigenvectors: ", toc-tic
     except Exception as err:
         print err
         w = err.eigenvalues
         v = err.eigenvectors
+    theta = np.unwrap(np.arctan2(v[:, EIG2], v[:, EIG1]))
+    #Without loss of generality, switch theta to overall increasing
+    if theta[-1] - theta[0] < 0:
+        theta = -theta
+    theta = theta - theta[0]
+    return (D, L, v, theta)
+
+#Give different angles a score based on the energy of the novelty function
+#that occurs around those angles
+def scoreAngles(s, theta, NAngles):
+    angles = np.linspace(0, 2*np.pi, NAngles+1)
+    angles = angles[0:NAngles]
+    scores = np.zeros(NAngles)
+    sigma = angles[1]-angles[0]
     
-    plt.subplot(231)
-    plt.plot(s.novFn)
-    plt.title("Original Function")
-    plt.subplot(232)
-    plt.imshow(D)
-    plt.title('SSM')
-    plt.subplot(233)
-    plt.spy(L)
-    plt.title('Laplacian Matrix')
-    plt.subplot(234)
-    plt.plot(v[:, 1], 'b')
-    plt.hold(True)
-    plt.plot(v[:, 2], 'r')
-    plt.title('Eigenvectors 2 and 3')
-    plt.subplot(235)
-    plt.plot(v[:, 1], v[:, 2])
-    plt.title('Eigenvectors 2-3')
-    plt.subplot(236)
-    plt.plot(np.arctan2(v[:, 2], v[:, 1]))
-    plt.title('Circular Coordinates')
+    dtheta = theta[None, :] - angles[:, None]
+    dtheta = np.mod(dtheta, 2*np.pi)
+    dtheta[dtheta > np.pi] = 2*np.pi - dtheta[dtheta > np.pi] #Ensure proper wraparound
+    weights = np.exp(-dtheta**2/(2*sigma**2))
+    novFn = s.novFn[0:len(theta)]
+    scores = np.abs(weights*novFn[None, :])
+    scoresFinal = np.sum(scores, 1)
+    return (angles, scores, scoresFinal)
+
+#Determine when the unwrapped angles "t" pass some 2pi offset of "angle"
+#Assumes the angle has been unwrapped and is overall increasing
+def getOnsetsPassingAngle(t, angle):
+    #Find whether each theta is above or below the closest 2pi multiple of angle
+    diff = (angle - t) % (2*np.pi)
+    diff[diff > np.pi] = -1 #These angles are above the closest theta
+    diff[diff >= 0] = 1
+    idx = np.arange(len(diff)-1)
+    idx = idx[diff[1::] - diff[0:-1] == 2]
+    #TODO: Denoise noisy transitions
+    return idx
+
+if __name__ == "__main__":
+    np.random.seed(100)
+    T = 200
+    NPCs = 10
+    noiseSigma = 0.05
+    gaussSigma = 3
+    (gtPulses, x) = getSyntheticPulseTrainFreqAmpDrift(5000, T-30, T+30, 1, 1, noiseSigma, gaussSigma)
+    #(gtPulses2, x2) = getSyntheticPulseTrainFreqAmpDrift(5000, T/2, T/2, 1, 1, 0, gaussSigma)
+    #gtPulses += gtPulses2
+    #x += 0.5*x2
+    plt.plot(gtPulses)
     plt.show()
+    x = x - np.mean(x)
+    s = BeatingSound()
+    s.novFn = x
+
+    W = 300
+    (D, L, v, theta) = getCircularCoordinates(s, W, NPCs)
+    plt.subplot(311)
+    plt.plot(theta)
+    plt.title('Original Theta')
+    theta2 = ptv.tv1_1d(theta, 1)
+    plt.subplot(312)
+    plt.plot(theta2)
+    plt.title('TV Theta')
+    plt.subplot(313)
+    plt.plot(theta2 - theta)
+    plt.title('Difference')
+    plt.show()
+    theta = theta2
+    
+    (angles, scores, scoresFinal) = scoreAngles(s, theta, 1000)
+    transitionAngle = angles[np.argmax(scoresFinal)]
+    
+    print "transitionAngle = ", transitionAngle*180/np.pi
+    onsets = getOnsetsPassingAngle(theta, transitionAngle)
+    gtOnsets = np.arange(len(gtPulses))
+    gtOnsets = gtOnsets[gtPulses > 0]
+    
+#    plt.subplot(121)
+#    plt.plot(np.arange(len(theta)), 180*(theta%2*np.pi)/np.pi, 'b')
+#    plt.hold(True)
+#    plt.plot([0, len(theta)], [transitionAngle*180/np.pi, transitionAngle*180/np.pi], 'r')
+    
+    plotCircularCoordinates(s, D, v, theta, onsets, gtOnsets)
     
