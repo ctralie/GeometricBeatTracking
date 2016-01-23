@@ -1,0 +1,201 @@
+<html>
+<head>
+<script type="text/javascript" src="libs/numeric-1.2.6.min.js"></script>
+</head>
+<body>
+
+<table>
+<tr><td><h3>Audio File</h3></td><td><input type = "file" id = "audioInput"></td></tr>
+<tr><td><h3>Geometric Info File</h3></td><td><input type="file" id="geomModelInput"></td></tr>
+</table>
+
+
+
+
+
+<h2><p id = "pagestatus"></p></h2>
+
+
+<table><tr><td>
+<table><tr><td>
+<canvas id="CircCanvas" style="border: none;" width="600" height="600"></canvas>
+</td></tr>
+<tr><td bgcolor = "black">
+<input type="range" id="timeSlider" min = "0" max = "1000" value = "0" step = "1" style="width:620px">
+</td></tr>
+</table>
+
+<table>
+<tr>
+<td><button type = "button" onclick = "playAudioButton()">Play</button></td>
+<td><button type = "button" onclick = "pauseAudio()">Pause</button></td>
+</tr>
+</table>
+</td>
+</table>
+
+
+</td>
+</tr></table>
+
+<script>
+    var source = null;
+    var analyser = null;
+    var context = null;
+    var buffer = null;
+    var fileInput = document.getElementById('geomModelInput');
+    var result = document.getElementById('text');
+    var canvas = document.getElementById('CircCanvas');
+    var ctx = canvas.getContext("2d"); //For drawing
+    var X = [[]];
+    var R = 100.0;
+    //Playing information
+    var playIdx = 0;
+    var playTime = 0;
+    var startTime = 0;
+    var offsetTime = 0;
+    var playing = false;
+    
+    var displayTimeEdges = true;
+    var displayScaffoldingEdges = true;
+
+    function disconnect() {
+        source.stop();
+        source.disconnect(0);
+        analyser.disconnect(0);
+    }
+
+	fileInput.addEventListener('change', function(e) {
+		var file = fileInput.files[0];
+		var textType = /text.*/;
+
+        var W = canvas.width;
+        var H = canvas.height;
+        R = 0.5*Math.sqrt(W*W/4 + H*H/4);
+
+		if (file.type.match(textType)) {
+			var reader = new FileReader();
+			reader.onload = function(e) {
+				var fields = reader.result.split(",");
+				var N = (fields.length-1)/2;
+				X = numeric.rep([N, 3]);
+				var theta = 0.0;
+				for (var i = 0; i < N; i++) {
+					X[i][2] = parseFloat(fields[i*2+1]);
+					theta = parseFloat(fields[i*2]);
+					X[i][0] = W/2 + R*Math.cos(theta);
+					X[i][1] = H/2 + R*Math.sin(theta);
+				}
+			}
+			reader.readAsText(file);	
+		} else {
+			result.innerHTML = "File not supported!"
+		}
+	});
+    
+    function repaint() {
+        if (playing) {
+            var playTime = context.currentTime - startTime + offsetTime;
+            timeSlider.value = "" + parseInt(""+Math.round(playTime*1000.0/buffer.duration));
+            requestAnimationFrame(repaint);
+        }
+        else {
+            //If paused allow scrolling around
+            playTime = offsetTime;
+        }
+		while (X[playIdx][2] < playTime && playIdx < X.length - 1) {
+			playIdx++;
+		}
+        
+        var W = canvas.width;
+        var H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+        ctx.beginPath();
+        ctx.arc(W/2, H/2, R, 0, 2*Math.PI);
+        ctx.stroke();
+
+        ctx.fillStyle = "#FF0000";
+        var dW = 10;
+        ctx.fillRect(X[playIdx][0]-dW, X[playIdx][1]-dW, dW*2+1, dW*2+1);
+    }
+    
+    function playAudioButton() {
+        if (!playing) {
+            //Prevent the user from accidentally playing multiple audio streams
+            playAudio();
+        }
+    }
+    
+    function playAudio() {
+        if (context === null) {
+            return;
+        }
+        playing = true;
+        console.log("Playing audio, offsetTime = " + offsetTime);
+        source = context.createBufferSource();
+        source.buffer = buffer;
+        analyser = context.createAnalyser();
+        source.connect(analyser);
+        analyser.connect(context.destination);
+
+        startTime = context.currentTime;
+
+        //setTimeout(disconnect, source.buffer.duration * 1000 +1000);
+        
+        source.start(context.currentTime, offsetTime, buffer.duration - offsetTime);
+        
+        playIdx = 0;
+        requestAnimationFrame(repaint);
+    }
+    
+    function pauseAudio() {
+        console.log("Pausing");
+        if (source === null) {
+            return;
+        }
+        playing = false;
+        source.stop();
+        offsetTime = context.currentTime - startTime + offsetTime;
+    }
+    
+    var audioInput = document.getElementById('audioInput');
+    audioInput.addEventListener('change', function(e) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var data = e.target.result;
+            context = new (window.AudioContext || window.webkitAudioContext)();
+            
+            if(context.decodeAudioData) {
+                context.decodeAudioData(data, function(buff) {
+                buffer = buff;
+                }, function(e) {
+                    console.log(e);
+                });
+            } else {
+                buffer = context.createBuffer(data, false /*mixToMono*/);
+                playAudio();
+            }    
+        }        
+        reader.readAsArrayBuffer(audioInput.files[0]);
+    });
+    
+    var timeSlider = document.getElementById('timeSlider');
+    timeSlider.addEventListener('change', function(e) {
+        if (buffer === null) {
+            return;
+        }
+        offsetTime = buffer.duration*parseFloat(timeSlider.value)/1000.0;
+        playIdx = 0;
+        requestAnimationFrame(repaint);
+        if (playing) {
+            source.stop();
+            playAudio();
+        }
+    });
+    
+    repaint();
+</script>
+
+
+</body>
+</html>

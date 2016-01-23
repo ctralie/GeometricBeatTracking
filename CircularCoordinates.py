@@ -144,8 +144,10 @@ def getCircularCoordinatesBlock(X, Normalize = True):
         print "Time computing eigenvectors: ", toc-tic
     except Exception as err:
         print err
-        w = err.eigenvalues
-        v = err.eigenvectors
+        #w = err.eigenvalues
+        #v = err.eigenvectors
+        w = np.zeros(2)
+        v = np.zeros((L.shape[0], max(EIG2, EIG1)+1))
     theta = np.unwrap(np.arctan2(v[:, EIG2], v[:, EIG1]))
     #Without loss of generality, switch theta to overall increasing
     if theta[-1] - theta[0] < 0:
@@ -185,7 +187,7 @@ def medianAlignBlocks(idxs, BlockAngles):
             BlockAngles[i] += (med1-med2)
 
 def medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop):
-    theta = np.zeros((BlockLen/BlockHop, N))
+    theta = np.nan*np.ones((BlockLen/BlockHop, N))
     currIdx = np.zeros(N, dtype=np.int64)
     for i in range(len(idxs)):
         theta[currIdx[idxs[i]], idxs[i]] = BlockAngles[i]
@@ -236,8 +238,21 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = Tru
             plt.plot(idxs[i], BlockAngles[i])
         plt.title("Blocks After Alignment")
         plt.show()
+
     #Step 4: Finish merging all of the blocks by taking the median of values at the same time coordinate
-    return medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop)
+    theta = medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop)
+    #Fill in nan values with zero order hold (not the best but gets the job done)
+    if np.isnan(theta[0]):
+        theta[0] = 0
+    for i in range(1, len(theta)):
+        if np.isnan(theta[i]):
+            theta[i] = theta[i-1]
+    if doPlot:
+        plt.plot(theta)
+        plt.show()
+    #TV denoising of theta
+    theta = ptv.tv1_1d(theta, 1)
+    return theta
 
 #Give different angles a score based on the energy of the novelty function
 #that occurs around those angles
@@ -274,10 +289,11 @@ if __name__ == "__main__":
     NPCs = 20
     noiseSigma = 0.05
     gaussSigma = 3
-    (gtPulses, x) = getSyntheticPulseTrainFreqAmpDrift(5000, T, T, 1, 1, noiseSigma, gaussSigma)
+    #(gtPulses, x) = getSyntheticPulseTrainFreqAmpDrift(5000, T-30, T+30, 1, 1, noiseSigma, gaussSigma)
     #(gtPulses2, x2) = getSyntheticPulseTrainFreqAmpDrift(5000, T/2, T/2, 1, 1, 0, gaussSigma)
     #gtPulses += gtPulses2
     #x += 0.5*x2
+    (gtPulses, x) = getSyntheticPulseTrainRandMicrobeats(5000, T, noiseSigma, gaussSigma)
     gtOnsets = np.arange(len(gtPulses))
     gtOnsets = gtOnsets[gtPulses > 0]
     
@@ -302,7 +318,7 @@ if __name__ == "__main__":
 #    plt.subplot(311)
 #    plt.plot(theta)
 #    plt.title('Original Theta')
-#    theta2 = ptv.tv1_1d(theta, 1)
+#    
 #    plt.subplot(312)
 #    plt.plot(theta2)
 #    plt.title('TV Theta')

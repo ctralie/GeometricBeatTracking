@@ -79,6 +79,14 @@ class BeatingSound(object):
         #Output audio information
         sio.wavfile.write("%s.wav"%outprefix, self.Fs, self.XAudio)
     
+    def exportToCircCoordinatesGUI(self, theta, outprefix):
+        fout = open("%s.txt"%outprefix, "w")
+        for i in range(len(theta)):
+            fout.write("%g,%g,"%(theta[i], i*float(self.hopSize)/self.Fs))
+        fout.close()
+        #Output audio information
+        sio.wavfile.write("%s.wav"%outprefix, self.Fs, self.XAudio)        
+    
     def getSlidingWindowLeftSVD(self, W):
         #Calculate the left hand singular vectors of the sliding window of
         #the novelty function
