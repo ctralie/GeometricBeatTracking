@@ -39,18 +39,24 @@ class BeatingSound(object):
             print self.XAudio.shape
         print "Fs = %i"%self.Fs
         self.XAudio = librosa.core.to_mono(self.XAudio)
-
+    
     def processSpecgram(self, winSize, hopSize, pfmax):
         [self.winSize, self.hopSize, self.fmax] = [winSize, hopSize, pfmax]
         self.S = librosa.core.stft(self.XAudio, winSize, hopSize)
         self.M = librosa.filters.mel(self.Fs, winSize, fmax = pfmax)
-        self.X = 20*np.log(self.M.dot(np.abs(self.S)))
+        arg = self.M.dot(np.abs(self.S))
+        self.X = librosa.core.logamplitude(arg)
     
     def getMFCCNoveltyFn(self, winSize, hopSize, pfmax):
         self.processSpecgram(winSize, hopSize, pfmax)
         diff = self.X[:, 1:] - self.X[:, 0:-1]
         diff[diff < 0] = 0
         self.novFn = np.sum(diff, 0).flatten()
+    
+    #Call librosa to get the dynamic programming onsets for comparison
+    def getDynamicProgOnsets(self):
+        (tempo, beats) = librosa.beat.beat_track(self.XAudio, self.Fs, hop_length = self.hopSize)
+        return beats
     
     def getSampleDelay(self, i):
         if i == -1:
@@ -86,6 +92,14 @@ class BeatingSound(object):
         fout.close()
         #Output audio information
         sio.wavfile.write("%s.wav"%outprefix, self.Fs, self.XAudio)        
+    
+    def exportOnsetClicks(self, outname, onsets):
+        YAudio = np.array(self.XAudio)
+        blip = np.cos(2*np.pi*np.arange(self.hopSize*4)*440.0/self.Fs)
+        blip = np.array(blip*np.max(np.abs(YAudio)), dtype=YAudio.dtype)
+        for idx in onsets:
+            YAudio[idx*self.hopSize:(idx+4)*self.hopSize] = blip
+        sio.wavfile.write(outname, self.Fs, YAudio)
     
     def getSlidingWindowLeftSVD(self, W):
         #Calculate the left hand singular vectors of the sliding window of
@@ -149,7 +163,8 @@ class BeatingSound(object):
         res = np.zeros(N)
         counts = np.zeros(N)
         for i in range(W):
-            res[i:i+M] += (U[i, :].dot(S)).dot(V[idxs, :])
+            Window = (U[i, :].dot(S)).dot(V[idxs, :])
+            res[i:i+M] += Window/np.sqrt(np.sum(Window**2))
             counts[i:i+M] += 1.0
         return res/counts
         

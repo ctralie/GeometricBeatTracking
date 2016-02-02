@@ -113,6 +113,35 @@ def plotCircularCoordinates2(s, theta, onsets, gtOnsets):
     plt.title('Onsets')
     plt.show()
 
+#Give different angles a score based on the energy of the novelty function
+#that occurs around those angles
+def scoreAngles(s, theta, NAngles):
+    angles = np.linspace(0, 2*np.pi, NAngles+1)
+    angles = angles[0:NAngles]
+    scores = np.zeros(NAngles)
+    sigma = np.pi/20
+    
+    dtheta = theta[None, :] - angles[:, None]
+    dtheta = np.mod(dtheta, 2*np.pi)
+    dtheta[dtheta > np.pi] = 2*np.pi - dtheta[dtheta > np.pi] #Ensure proper wraparound
+    weights = np.exp(-dtheta**2/(2*sigma**2))
+    novFn = s.novFn[0:len(theta)]
+    scores = np.abs(weights*novFn[None, :])
+    scoresFinal = np.sum(scores, 1)
+    return (angles, scores, scoresFinal)
+
+#Determine when the unwrapped angles "t" pass some 2pi offset of "angle"
+#Assumes the angle has been unwrapped and is overall increasing
+def getOnsetsPassingAngle(t, angle):
+    #Find whether each theta is above or below the closest 2pi multiple of angle
+    diff = (angle - t) % (2*np.pi)
+    diff[diff > np.pi] = -1 #These angles are above the closest theta
+    diff[diff >= 0] = 1
+    idx = np.arange(len(diff)-1)
+    idx = idx[diff[1::] - diff[0:-1] == 2]
+    #TODO: Denoise noisy transitions
+    return idx
+
 def getCircularCoordinatesBlock(X, Normalize = True):
     NEig = 16
     #Compute SSM
@@ -169,6 +198,8 @@ def discardBadBlocks(s, idxs, BlockAngles):
     BlockAngles = [BlockAngles[i] for i in validIdx]
     return (idxs, BlockAngles)
 
+#Align adjacent blocks by aligning the median of the y coordinates in their 
+#overlapping region
 def medianAlignBlocks(idxs, BlockAngles):
     N = len(idxs[0])
     for i in range(1, len(idxs)):
@@ -186,6 +217,8 @@ def medianAlignBlocks(idxs, BlockAngles):
             med2 = np.median(BlockAngles[i][0:N-k])
             BlockAngles[i] += (med1-med2)
 
+#Merge overlapping blocks by taking the median of the circular coordinates
+#in overlapping regions after alignment
 def medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop):
     theta = np.nan*np.ones((BlockLen/BlockHop, N))
     currIdx = np.zeros(N, dtype=np.int64)
@@ -196,8 +229,25 @@ def medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop):
 
 #Do circular coordinates in a sliding window and aggregate the results
 #in a consistent way
-def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = True, doPlot = True):
-    #Step 0: Perform PCA on a sliding window over the entire song
+def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = True, denoise = True, doPlot = True):
+    #Step 0: Perform Sliding Window Denoising
+    novFnOrig = np.array(s.novFn)
+    if denoise:
+        orig = s.novFn
+        s.getSlidingWindowLeftSVD(W)
+        s.getSlidingWindowRightSVD(W, NPCs)
+        s.novFn = s.performDenoising(np.arange(NPCs))
+
+        if doPlot:
+            idx = np.arange(len(orig))*float(s.hopSize)/s.Fs
+            plt.plot(idx, orig/np.max(np.abs(orig)))
+            plt.hold(True)
+            plt.plot(idx, s.novFn/np.max(np.abs(s.novFn)))
+            plt.xlabel('Time (Seconds)')
+            plt.title('Sliding Window Smoothing')
+            plt.show()
+    
+    #Step 1: Perform PCA on a sliding window over the entire song
     (U, S) = s.getSlidingWindowLeftSVD(W)
     SMat = np.eye(NPCs)
     np.fill_diagonal(SMat, S[0:NPCs])
@@ -211,7 +261,7 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = Tru
     NBlocks = int(np.ceil(1 + (N - BlockLen)/BlockHop))
     print "NBlocks = ", NBlocks
     BlockAngles = [] #Holds the circular coordinates for each different block
-    #Step 1: Get the circular coordinates in blocks
+    #Step 2: Get the circular coordinates in blocks
     for i in range(NBlocks):
         thisidxs = np.arange(i*BlockHop, i*BlockHop+BlockLen, dtype=np.int64)
         thisidxs = thisidxs[thisidxs < N]
@@ -222,21 +272,33 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = Tru
         Ds.append(D)
         Ls.append(L)
         vs.append(v)
-    #Step 2: Discard bad blocks and plot the blocks before alignment
+    if doPlot:
+        plt.hold(True)
+        for i in range(len(idxs)):
+            plt.plot(idxs[i]*s.hopSize/float(s.Fs), BlockAngles[i])
+        plt.title("All Blocks")
+        plt.xlabel("Time (Seconds)")
+        plt.ylabel("Theta (Radians)")
+        plt.show()
+    #Step 3: Discard bad blocks and plot the blocks before alignment
     (idxs, BlockAngles) = discardBadBlocks(s, idxs, BlockAngles)
     if doPlot:
         plt.hold(True)
         for i in range(len(idxs)):
-            plt.plot(idxs[i], BlockAngles[i])
-        plt.title("Blocks Before Alignment")
+            plt.plot(idxs[i]*s.hopSize/float(s.Fs), BlockAngles[i])
+        plt.title("Good Blocks Before Alignment")
+        plt.xlabel("Time (Seconds)")
+        plt.ylabel("Theta (Radians)")
         plt.show()
-    #Step 3: Median align the blocks and plot the result
+    #Step 4: Median align the blocks and plot the result
     medianAlignBlocks(idxs, BlockAngles)
     if doPlot:
         plt.hold(True)
         for i in range(len(idxs)):
-            plt.plot(idxs[i], BlockAngles[i])
+            plt.plot(idxs[i]*s.hopSize/float(s.Fs), BlockAngles[i])
         plt.title("Blocks After Alignment")
+        plt.xlabel("Time (Seconds)")
+        plt.ylabel("Theta (Radians)")
         plt.show()
 
     #Step 4: Finish merging all of the blocks by taking the median of values at the same time coordinate
@@ -250,38 +312,29 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = Tru
     if doPlot:
         plt.plot(theta)
         plt.show()
-    #TV denoising of theta
-    theta = ptv.tv1_1d(theta, 1)
-    return theta
-
-#Give different angles a score based on the energy of the novelty function
-#that occurs around those angles
-def scoreAngles(s, theta, NAngles):
-    angles = np.linspace(0, 2*np.pi, NAngles+1)
-    angles = angles[0:NAngles]
-    scores = np.zeros(NAngles)
-    sigma = angles[1]-angles[0]
     
-    dtheta = theta[None, :] - angles[:, None]
-    dtheta = np.mod(dtheta, 2*np.pi)
-    dtheta[dtheta > np.pi] = 2*np.pi - dtheta[dtheta > np.pi] #Ensure proper wraparound
-    weights = np.exp(-dtheta**2/(2*sigma**2))
-    novFn = s.novFn[0:len(theta)]
-    scores = np.abs(weights*novFn[None, :])
-    scoresFinal = np.sum(scores, 1)
-    return (angles, scores, scoresFinal)
-
-#Determine when the unwrapped angles "t" pass some 2pi offset of "angle"
-#Assumes the angle has been unwrapped and is overall increasing
-def getOnsetsPassingAngle(t, angle):
-    #Find whether each theta is above or below the closest 2pi multiple of angle
-    diff = (angle - t) % (2*np.pi)
-    diff[diff > np.pi] = -1 #These angles are above the closest theta
-    diff[diff >= 0] = 1
-    idx = np.arange(len(diff)-1)
-    idx = idx[diff[1::] - diff[0:-1] == 2]
-    #TODO: Denoise noisy transitions
-    return idx
+    #Step 5: Extract Onsets
+    #TV denoising of theta
+    thetaorig = np.array(theta)
+    theta = ptv.tv1_1d(theta, 1)
+    if doPlot:
+        plt.subplot(311)
+        plt.plot(thetaorig)
+        plt.title('Theta Original')
+        plt.subplot(312)
+        plt.plot(theta)
+        plt.title('Theta TV Denoised')
+        plt.subplot(313)
+        plt.plot(theta - thetaorig)
+        plt.title('Difference')
+        plt.show()
+    s.novFn = novFnOrig
+    (angles, scores, scoresFinal) = scoreAngles(s, theta, 1000)
+    transitionAngle = angles[np.argmax(scoresFinal)]
+    
+    print "transitionAngle = ", transitionAngle*180/np.pi
+    onsets = getOnsetsPassingAngle(theta, transitionAngle)
+    return (theta, onsets)
 
 if __name__ == "__main__":
     np.random.seed(100)
@@ -306,12 +359,7 @@ if __name__ == "__main__":
     s.hopSize = 1
 
     W = 300
-    theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100)
-    (angles, scores, scoresFinal) = scoreAngles(s, theta, 1000)
-    transitionAngle = angles[np.argmax(scoresFinal)]
-    
-    print "transitionAngle = ", transitionAngle*180/np.pi
-    onsets = getOnsetsPassingAngle(theta, transitionAngle)
+    (theta, onsets) = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100)
     plotCircularCoordinates2(s, theta, onsets, gtOnsets)
     
 #    (D, L, v, theta) = getCircularCoordinates(s, W, NPCs)
