@@ -7,6 +7,7 @@ import prox_tv as ptv
 import time
 from SyntheticFunctions import *
 from SoundTools import *
+from DynProgOnsets import *
 
 EIG1 = 1
 EIG2 = 2
@@ -312,29 +313,7 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = Tru
     if doPlot:
         plt.plot(theta)
         plt.show()
-    
-    #Step 5: Extract Onsets
-    #TV denoising of theta
-    thetaorig = np.array(theta)
-    theta = ptv.tv1_1d(theta, 1)
-    if doPlot:
-        plt.subplot(311)
-        plt.plot(thetaorig)
-        plt.title('Theta Original')
-        plt.subplot(312)
-        plt.plot(theta)
-        plt.title('Theta TV Denoised')
-        plt.subplot(313)
-        plt.plot(theta - thetaorig)
-        plt.title('Difference')
-        plt.show()
-    s.novFn = novFnOrig
-    (angles, scores, scoresFinal) = scoreAngles(s, theta, 1000)
-    transitionAngle = angles[np.argmax(scoresFinal)]
-    
-    print "transitionAngle = ", transitionAngle*180/np.pi
-    onsets = getOnsetsPassingAngle(theta, transitionAngle)
-    return (theta, onsets)
+    return theta
 
 if __name__ == "__main__":
     np.random.seed(100)
@@ -359,7 +338,9 @@ if __name__ == "__main__":
     s.hopSize = 1
 
     W = 300
-    (theta, onsets) = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100)
+    theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, doPlot = False)
+    onsets = getOnsetsDP(theta, s, 6)
+    #TODO: Extract onsets
     plotCircularCoordinates2(s, theta, onsets, gtOnsets)
     
 #    (D, L, v, theta) = getCircularCoordinates(s, W, NPCs)
