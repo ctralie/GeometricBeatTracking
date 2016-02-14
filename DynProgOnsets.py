@@ -4,6 +4,7 @@ import numpy as np
 #s: BeatingSound object (has Fs, nvFn, hopSize)
 #tightness: How much to weight the beat penalty
 #alpha: How much to weight the novelty function
+#Return (onsets, score)
 def getOnsetsDP(theta, s, tightness, alpha = 0.8):
     N = theta.size
     
@@ -33,6 +34,8 @@ def getOnsetsDP(theta, s, tightness, alpha = 0.8):
         #Log-penalize how far away from 2*pi the interval is
         indices = np.arange(i1[i], i2[i]+1)
         indices = indices[(theta[i]-theta[indices]) > 0]
+        if (len(indices) == 0):
+            continue
         txcost = -tightness*(np.log(np.abs(theta[i]-theta[indices])/(2*np.pi))**2)
         scores = cscore[indices] + txcost
         #Find best predecessor location
@@ -47,4 +50,15 @@ def getOnsetsDP(theta, s, tightness, alpha = 0.8):
         b.append(backlink[b[-1]])
     b = np.array(b[0:-1])
     b = np.fliplr(b[None, :]).flatten()
-    return b
+    return (b, cscore[b[-1]])
+
+#Run dynamic programming several times on different integer scalings
+def searchTempoRange(theta, s, tightness, alpha):
+    NScales = 9
+    AllScores = np.zeros(NScales)
+    AllOnsets = []
+    for i in range(1, NScales+1):
+        (onsets, score) = getOnsetsDP(theta/i, s, tightness, alpha)
+        AllScores[i-1] = score*i
+        AllOnsets.append(onsets)
+    return (AllOnsets, AllScores)

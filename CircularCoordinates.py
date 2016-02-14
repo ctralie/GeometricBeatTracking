@@ -238,6 +238,7 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = Tru
         s.getSlidingWindowLeftSVD(W)
         s.getSlidingWindowRightSVD(W, NPCs)
         s.novFn = s.performDenoising(np.arange(NPCs))
+        s.novFn = s.novFn - np.min(s.novFn)
 
         if doPlot:
             idx = np.arange(len(orig))*float(s.hopSize)/s.Fs
@@ -339,7 +340,7 @@ if __name__ == "__main__":
 
     W = 300
     theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, doPlot = False)
-    onsets = getOnsetsDP(theta, s, 6)
+    (onsets, score) = getOnsetsDP(theta, s, 6)
     #TODO: Extract onsets
     plotCircularCoordinates2(s, theta, onsets, gtOnsets)
     
