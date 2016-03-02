@@ -59,6 +59,26 @@ def searchTempoRange(theta, s, tightness, alpha):
     AllOnsets = []
     for i in range(1, NScales+1):
         (onsets, score) = getOnsetsDP(theta/i, s, tightness, alpha)
-        AllScores[i-1] = score*i
+        x = np.zeros(len(s.novFn))
+        x[onsets] = 1
+        x = np.convolve(x, np.exp(np.arange(-5, 6)**2/9), 'same')
+        AllScores[i-1] = i*np.sum(s.novFn*x)
         AllOnsets.append(onsets)
     return (AllOnsets, AllScores)
+
+#Project sliding windows of the novelty function onto sliding windows
+#of cosine of theta and return the sum of the magnitudes of all projections
+def evalThetas(theta, novFn, W):
+    N = len(theta)
+    M = N-W+1
+    ret = 0.0
+    ctheta = np.cos(theta)
+    f = novFn[0:N]
+    for i in range(M):
+        s = np.array(novFn[i:i+W])
+        c = np.array(ctheta[i:i+W])
+        #Normalize both
+        s = s/np.sqrt(np.sum(s**2))
+        c = c/np.sqrt(np.sum(c**2))
+        ret += np.abs(np.sum(c*s))
+    return ret

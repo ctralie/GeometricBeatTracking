@@ -1,0 +1,6 @@
+[submodule "Beat-Tracking-Evaluation-Toolbox"]
+	path = Beat-Tracking-Evaluation-Toolbox
+	url = https://github.com/adamstark/Beat-Tracking-Evaluation-Toolbox.git
+[submodule "Datasets/BallroomAnnotations"]
+	path = Datasets/BallroomAnnotations
+	url = https://github.com/CPJKU/BallroomAnnotations.git
