@@ -229,7 +229,7 @@ def medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop):
 
 #Do circular coordinates in a sliding window and aggregate the results
 #in a consistent way
-def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, gaussWin = 1, Normalize = True, denoise = True, doPlot = True):
+def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussWin = 1, Normalize = True, denoise = True, doPlot = True):
     #Step 0: Perform Sliding Window Denoising
     novFnOrig = np.array(s.novFn)
     if denoise:
@@ -272,14 +272,13 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, gaussWin = 1, N
         thisidxs = thisidxs[thisidxs < N]
         idxs.append(thisidxs)
     #Pull out all blocks and prepare for parallel processing
-    parpool = Pool(processes = 8)
     Blocks = []
     for i in range(NBlocks):
         Blocks.append(np.array(X[:, idxs[i]]))
     Normalize = True
     args = zip(Blocks, [Normalize]*len(Blocks))
     res = parpool.map(getCircularCoordinatesBlock, args)
-    for i in range(len(res)):
+    for i in range(NBlocks):
         (D, L, v, theta) = res[i]
         BlockAngles.append(theta)
         Ds.append(D)

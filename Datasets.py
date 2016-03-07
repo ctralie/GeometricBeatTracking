@@ -6,6 +6,7 @@ sys.path.append("Beat-Tracking-Evaluation-Toolbox")
 import beat_evaluation_toolbox as be
 import matplotlib.pyplot as plt
 import pickle
+from multiprocessing import Pool
 
 DO_SKIP = True #Skip files that have already been computed
 
@@ -28,7 +29,7 @@ def getBallroomData():
     audioFiles = ["Datasets/BallroomData/%s"%af for af in audioFiles]
     return (audioFiles, annotations)
 
-def runTests(audioFiles, annotations):
+def runTests(audioFiles, annotations, parpool):
     hopSize = 128
     winSize = 2*2048
     NPCs = 20
@@ -46,7 +47,7 @@ def runTests(audioFiles, annotations):
         s.loadAudio(audioFiles[i])
         s.getMFCCNoveltyFn(winSize, hopSize, 8000)
         W = 2*s.Fs/hopSize
-        theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, gaussWin, denoise = True, doPlot = False)
+        theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, parpool, gaussWin, denoise = True, doPlot = False)
         (onsets, score) = getOnsetsDP(theta, s, 6, 0.4)
         dponsets =  s.getDynamicProgOnsets()
         #Output clicks
@@ -66,5 +67,6 @@ def runTests(audioFiles, annotations):
     pickle.dump(open("DpRes.txt", "w"), {"DpRes":DpRes})
 
 if __name__ == '__main__':
+    parpool = Pool(processes = 8)
     (audioFiles, annotations) = getBallroomData()
-    runTests(audioFiles, annotations)
+    runTests(audioFiles, annotations, parpool)
