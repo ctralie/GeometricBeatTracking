@@ -5,6 +5,7 @@ import sys
 sys.path.append("Beat-Tracking-Evaluation-Toolbox")
 import beat_evaluation_toolbox as be
 import matplotlib.pyplot as plt
+import pickle
 
 def getBallroomData():
     audiopath = "Datasets/BallroomData"
@@ -27,18 +28,19 @@ def getBallroomData():
 
 def runTests(audioFiles, annotations):
     hopSize = 128
-    winSize = 2048
+    winSize = 2*2048
     NPCs = 20
     N = len(audioFiles)
     myonsets = []
     alldponsets = []
+    gaussWin = 20
     for i in range(N):
         print "Doing %s"%audioFiles[i]
         s = BeatingSound()
         s.loadAudio(audioFiles[i])
         s.getMFCCNoveltyFn(winSize, hopSize, 8000)
-        W = s.Fs/hopSize
-        theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, denoise = True, doPlot = False)
+        W = 2*s.Fs/hopSize
+        theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, gaussWin, denoise = True, doPlot = False)
         (onsets, score) = getOnsetsDP(theta, s, 6, 0.4)
         dponsets =  s.getDynamicProgOnsets()
         #Output clicks
@@ -47,12 +49,15 @@ def runTests(audioFiles, annotations):
         #Convert to seconds
         onsets = onsets*s.hopSize/float(s.Fs)
         dponsets = dponsets*s.hopSize/float(s.Fs)
+        sio.savemat("%s.mat"%audioFiles[i], {"onsets":onsets, "dponsets":dponsets})
         #Do evaluation
         myonsets.append(onsets)
         alldponsets.append(dponsets)
         print onsets
     MyRes = be.evaluate_db(annotations, myonsets, 'all', False)
     DpRes = be.evaluate_db(annotations, alldponsets, 'all', False)
+    pickle.dump(open("MyRes.txt", "w"), {"MyRes":MyRes})
+    pickle.dump(open("DpRes.txt", "w"), {"DpRes":DpRes})
 
 if __name__ == '__main__':
     (audioFiles, annotations) = getBallroomData()

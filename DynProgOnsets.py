@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 #theta: Circular coordinate estimates
 #s: BeatingSound object (has Fs, nvFn, hopSize)
@@ -18,16 +19,16 @@ def getOnsetsDP(theta, s, tightness, alpha = 0.8):
     slopes[sWin*2-1:] = np.convolve(theta, deriv, 'valid')/float(sWin**2)
     slopes[0:sWin*2-1] = slopes[sWin*2-1]
     #Use this to figure out search indices for each point
-    i1 = np.array(np.round(-2*np.pi/slopes), dtype=np.int64) #2 beats before
+    i1 = np.array(np.round(-20*np.pi/slopes), dtype=np.int64) #4 beats before
     i1 = i1 + np.arange(N)
     i1 = np.maximum(i1, 0)
-    i2 = np.array(np.round(-np.pi/(2*slopes)), dtype=np.int64) #Half of a beat before
+    i2 = np.array(np.round(-2*np.pi/(20*slopes)), dtype=np.int64) #Half of a beat before
     i2 = i2 + np.arange(N)
     i2 = np.maximum(i2, 0)
     
     #Step 2: Do dynamic programming
     backlink = -1*np.ones(N, dtype=np.int64) #Best predecessor for this point
-    cscore = np.array(s.novFn[0:N]) #Cumulative score
+    cscore = np.array(s.origNovFn[0:N]) #Cumulative score
     for i in range(N):
         if (i1[i] == i2[i]):
             continue

@@ -22,6 +22,7 @@ class BeatingSound(object):
         self.M = np.array([[]]) #Mel filterbank
         self.X = np.array([[]]) #Mel spectrogram
         self.novFn = np.array([]) #Novelty function
+        self.origNovFn = np.array([]) #Original novelty function before smoothing/denoising
         
     def loadAudio(self, filename):
         self.filename = filename
@@ -52,6 +53,7 @@ class BeatingSound(object):
         diff = self.X[:, 1:] - self.X[:, 0:-1]
         diff[diff < 0] = 0
         self.novFn = np.sum(diff, 0).flatten()
+        self.origNovFn = np.array(self.novFn)
     
     #Call librosa to get the dynamic programming onsets for comparison
     def getDynamicProgOnsets(self):
@@ -149,9 +151,16 @@ class BeatingSound(object):
             self.V += UTi[:, None].dot(x[None, :])
         return self.V
     
+    #Apply Gaussian smoothing to the novelty function
+    def smoothNovFn(self, W):
+        t = np.linspace(-1, 1, W)
+        g = np.exp(-t**2/0.25)
+        g = g/np.sum(g)
+        self.novFn = np.convolve(self.origNovFn, g, 'same')
+    
     #Find the nearest valid delay embedding only using certain principal components
     #idxs is the indices of the principal components to use
-    def performDenoising(self, idxs):
+    def slidingWindowDenoising(self, idxs):
         N = len(self.novFn)
         M = self.V.shape[1]
         NPCs = self.V.shape[0]

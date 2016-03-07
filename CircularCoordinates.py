@@ -11,7 +11,7 @@ from DynProgOnsets import *
 
 EIG1 = 1
 EIG2 = 2
-VALIDTEMPOMIN = 0.1
+VALIDTEMPOMIN = 0.2
 
 def SSMToBinary(D, Kappa):
     N = D.shape[0]
@@ -230,17 +230,20 @@ def medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop):
 
 #Do circular coordinates in a sliding window and aggregate the results
 #in a consistent way
-def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, Normalize = True, denoise = True, doPlot = True):
+def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, gaussWin = 1, Normalize = True, denoise = True, doPlot = True):
     #Step 0: Perform Sliding Window Denoising
     novFnOrig = np.array(s.novFn)
     if denoise:
-        orig = s.novFn
+        orig = s.origNovFn
+        if gaussWin > 1:            
+            s.smoothNovFn(gaussWin)
         s.getSlidingWindowLeftSVD(W)
         s.getSlidingWindowRightSVD(W, NPCs)
-        s.novFn = s.performDenoising(np.arange(NPCs))
+        s.novFn = s.slidingWindowDenoising(np.arange(NPCs))
         s.novFn = s.novFn - np.min(s.novFn)
-
+        
         if doPlot:
+            plt.clf()
             idx = np.arange(len(orig))*float(s.hopSize)/s.Fs
             plt.plot(idx, orig/np.max(np.abs(orig)))
             plt.hold(True)
