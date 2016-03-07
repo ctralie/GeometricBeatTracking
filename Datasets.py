@@ -7,6 +7,8 @@ import beat_evaluation_toolbox as be
 import matplotlib.pyplot as plt
 import pickle
 
+DO_SKIP = True #Skip files that have already been computed
+
 def getBallroomData():
     audiopath = "Datasets/BallroomData"
     fin = open("%s/allBallroomFiles"%audiopath)
@@ -35,6 +37,10 @@ def runTests(audioFiles, annotations):
     alldponsets = []
     gaussWin = 20
     for i in range(N):
+        matfile = "%s.mat"%audioFiles[i]
+        if DO_SKIP and os.path.exists(matfile):
+            print "Skipping %s"%audioFiles[i]
+            continue
         print "Doing %s"%audioFiles[i]
         s = BeatingSound()
         s.loadAudio(audioFiles[i])
@@ -49,7 +55,7 @@ def runTests(audioFiles, annotations):
         #Convert to seconds
         onsets = onsets*s.hopSize/float(s.Fs)
         dponsets = dponsets*s.hopSize/float(s.Fs)
-        sio.savemat("%s.mat"%audioFiles[i], {"onsets":onsets, "dponsets":dponsets})
+        sio.savemat(matfile, {"onsets":onsets, "dponsets":dponsets})
         #Do evaluation
         myonsets.append(onsets)
         alldponsets.append(dponsets)

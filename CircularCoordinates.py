@@ -8,6 +8,7 @@ import time
 from SyntheticFunctions import *
 from SoundTools import *
 from DynProgOnsets import *
+from multiprocessing import Pool
 
 EIG1 = 1
 EIG2 = 2
@@ -143,8 +144,9 @@ def getOnsetsPassingAngle(t, angle):
     #TODO: Denoise noisy transitions
     return idx
 
-def getCircularCoordinatesBlock(X, Normalize = True):
-    NEig = 16
+def getCircularCoordinatesBlock(args):
+    (X, Normalize) = args
+    NEig = 4
     #Compute SSM
     XSum = np.sum(X**2, 0)
     if Normalize:
@@ -167,11 +169,8 @@ def getCircularCoordinatesBlock(X, Normalize = True):
     v0 = np.random.randn(L.shape[0], 3)
     try:
         #http://stackoverflow.com/questions/12125952/scipys-sparse-eigsh-for-small-eigenvalues
-        tic = time.time()
         w, v = slinalg.eigsh(L, k=NEig, sigma = 0, which = 'LM')
         #plotEigenvectors(v, NEig)
-        toc = time.time()
-        print "Time computing eigenvectors: ", toc-tic
     except Exception as err:
         print err
         #w = err.eigenvalues
@@ -267,16 +266,28 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, gaussWin = 1, N
     print "NBlocks = ", NBlocks
     BlockAngles = [] #Holds the circular coordinates for each different block
     #Step 2: Get the circular coordinates in blocks
+    tic = time.time()
     for i in range(NBlocks):
         thisidxs = np.arange(i*BlockHop, i*BlockHop+BlockLen, dtype=np.int64)
         thisidxs = thisidxs[thisidxs < N]
         idxs.append(thisidxs)
+    #Pull out all blocks and prepare for parallel processing
+    parpool = Pool(processes = 8)
+    Blocks = []
     for i in range(NBlocks):
-        (D, L, v, theta) = getCircularCoordinatesBlock(X[:, idxs[i]], Normalize = True)
+        Blocks.append(np.array(X[:, idxs[i]]))
+    Normalize = True
+    args = zip(Blocks, [Normalize]*len(Blocks))
+    res = parpool.map(getCircularCoordinatesBlock, args)
+    for i in range(len(res)):
+        (D, L, v, theta) = res[i]
         BlockAngles.append(theta)
         Ds.append(D)
         Ls.append(L)
         vs.append(v)
+    toc = time.time()
+    print "Elapsed time circular coordinates computation: ", toc-tic
+    
     if doPlot:
         plt.hold(True)
         for i in range(len(idxs)):
