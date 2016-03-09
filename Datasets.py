@@ -24,34 +24,63 @@ def getBallroomData():
         fin = open(annFile)
         lines = fin.readlines()
         fin.close()
-        a = [float(l.split()[0]) for l in lines]
+        a = np.array([float(l.split()[0]) for l in lines])
         annotations.append(a)
     audioFiles = ["Datasets/BallroomData/%s"%af for af in audioFiles]
     return (audioFiles, annotations)
 
-def runTests(audioFiles, annotations, parpool):
+def exportGTClicks(audioFiles, annotations):
+    hopSize = 128
+    for i in range(len(audioFiles)):
+        print "Exporting GT Clicks for %s"%audioFiles[i]
+        s = BeatingSound()
+        s.loadAudio(audioFiles[i])
+        s.hopSize = hopSize
+        a = np.array(annotations[i])
+        a = np.array(np.round(a*s.Fs/s.hopSize), dtype=np.int64)
+        s.exportOnsetClicks("%s_GT.ogg"%audioFiles[i], a)
+
+def checkForDirectory(filename):
+    #Check to see if this directory exists and create folders if necessary
+    paths = filename.split("/")
+    for i in range(len(paths)):
+        p = paths[0]
+        for j in range(1, i):
+            p += "/" + paths[j]
+        if not os.path.exists(p):
+            os.mkdir(p)
+
+def runTests(audioFiles, annotations, resprefix, toskip, parpool):
     hopSize = 128
     winSize = 2*2048
     NPCs = 20
     N = len(audioFiles)
     myonsets = []
     alldponsets = []
+    gtannotations = []
     gaussWin = 20
     for i in range(N):
-        matfile = "%s.mat"%audioFiles[i]
+        if i in toskip:
+            continue
+        gtannotations.append(annotations[i])
+        matfile = "%s/%s.mat"%(resprefix, audioFiles[i])
+        checkForDirectory(matfile)
         if DO_SKIP and os.path.exists(matfile):
+            res = sio.loadmat(matfile)
+            myonsets.append(res['onsets'])
+            alldponsets.append(res['dponsets'])
             print "Skipping %s"%audioFiles[i]
             continue
         print "Doing %s"%audioFiles[i]
         s = BeatingSound()
         s.loadAudio(audioFiles[i])
         s.getMFCCNoveltyFn(winSize, hopSize, 8000)
-        W = 2*s.Fs/hopSize
+        W = 4*s.Fs/hopSize
         theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, parpool, gaussWin, denoise = True, doPlot = False)
         (onsets, score) = getOnsetsDP(theta, s, 6, 0.4)
         dponsets =  s.getDynamicProgOnsets()
         #Output clicks
-        s.exportOnsetClicks("%s_My.ogg"%audioFiles[i], onsets)
+        s.exportOnsetClicks("%s/%s_My.ogg"%(resprefix, audioFiles[i]), onsets)
         s.exportOnsetClicks("%s_DP.ogg"%audioFiles[i], dponsets)
         #Convert to seconds
         onsets = onsets*s.hopSize/float(s.Fs)
@@ -60,13 +89,13 @@ def runTests(audioFiles, annotations, parpool):
         #Do evaluation
         myonsets.append(onsets)
         alldponsets.append(dponsets)
-        print onsets
-    MyRes = be.evaluate_db(annotations, myonsets, 'all', False)
-    DpRes = be.evaluate_db(annotations, alldponsets, 'all', False)
-    pickle.dump(open("MyRes.txt", "w"), {"MyRes":MyRes})
-    pickle.dump(open("DpRes.txt", "w"), {"DpRes":DpRes})
+    for i in range(len(myonsets)):
+        myonsets[i] = myonsets[i].flatten()
+    MyRes = be.evaluate_db(gtannotations, myonsets, 'all', False)
+    DpRes = be.evaluate_db(gtannotations, alldponsets, 'all', False)
+    return (MyRes, DpRes)
 
 if __name__ == '__main__':
     parpool = Pool(processes = 8)
     (audioFiles, annotations) = getBallroomData()
-    runTests(audioFiles, annotations, parpool)
+    runTests(audioFiles, annotations, "Results/Test2", [212], parpool)

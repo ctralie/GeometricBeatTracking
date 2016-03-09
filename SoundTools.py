@@ -100,7 +100,8 @@ class BeatingSound(object):
         blip = np.cos(2*np.pi*np.arange(self.hopSize*4)*440.0/self.Fs)
         blip = np.array(blip*np.max(np.abs(YAudio)), dtype=YAudio.dtype)
         for idx in onsets:
-            YAudio[idx*self.hopSize:(idx+4)*self.hopSize] = blip
+            l = len(YAudio[idx*self.hopSize:(idx+4)*self.hopSize])
+            YAudio[idx*self.hopSize:(idx+4)*self.hopSize] = blip[0:l]
         sio.wavfile.write(outname, self.Fs, YAudio)
     
     def getSlidingWindowLeftSVD(self, W):
