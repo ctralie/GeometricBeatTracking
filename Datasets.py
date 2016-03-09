@@ -7,6 +7,7 @@ import beat_evaluation_toolbox as be
 import matplotlib.pyplot as plt
 import pickle
 from multiprocessing import Pool
+import os
 
 DO_SKIP = True #Skip files that have already been computed
 
@@ -28,6 +29,29 @@ def getBallroomData():
         annotations.append(a)
     audioFiles = ["Datasets/BallroomData/%s"%af for af in audioFiles]
     return (audioFiles, annotations)
+
+def getSMCData():
+    NFILES = 281
+    audiopath = "Datasets/SMC_MIREX/SMC_MIREX_Audio"
+    annopath = "Datasets/SMC_MIREX/SMC_MIREX_Annotations_05_08_2014"
+    annofiles = os.listdir(annopath)
+    songsDict = {}
+    for f in annofiles:
+        fields = f.split("_")
+        idx = int(fields[1])
+        audiofilename = audiopath + "/SMC_" + fields[1] + ".wav"
+        fin = open(annopath + "/" + f)
+        annotations = np.array([float(s) for s in fin.readlines()]).flatten()
+        fin.close()
+        songsDict[idx] = (audiofilename, annotations)
+    audioFiles = []
+    annotations = []
+    for i in songsDict:
+        (af, an) = songsDict[i]
+        audioFiles.append(af)
+        annotations.append(an)
+    return (audioFiles, annotations)
+        
 
 def exportGTClicks(audioFiles, annotations):
     hopSize = 128
@@ -97,5 +121,6 @@ def runTests(audioFiles, annotations, resprefix, toskip, parpool):
 
 if __name__ == '__main__':
     parpool = Pool(processes = 8)
-    (audioFiles, annotations) = getBallroomData()
+    #(audioFiles, annotations) = getBallroomData()
+    (audioFiles, annotations) = getSMCData()
     runTests(audioFiles, annotations, "Results/Test2", [212], parpool)
