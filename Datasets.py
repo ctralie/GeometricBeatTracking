@@ -25,7 +25,7 @@ def getBallroomData():
         fin = open(annFile)
         lines = fin.readlines()
         fin.close()
-        a = np.array([float(l.split()[0]) for l in lines])
+        a = np.array([float(l.split()[0]) for l in lines]).flatten()
         annotations.append(a)
     audioFiles = ["Datasets/BallroomData/%s"%af for af in audioFiles]
     return (audioFiles, annotations)
@@ -77,7 +77,7 @@ def checkForDirectory(filename):
 def runTests(audioFiles, annotations, resprefix, toskip, parpool):
     hopSize = 128
     winSize = 2*2048
-    NPCs = 20
+    NPCs = 60
     N = len(audioFiles)
     myonsets = []
     alldponsets = []
@@ -98,8 +98,9 @@ def runTests(audioFiles, annotations, resprefix, toskip, parpool):
         print "Doing %s"%audioFiles[i]
         s = BeatingSound()
         s.loadAudio(audioFiles[i])
-        s.getMFCCNoveltyFn(winSize, hopSize, 8000)
-        W = 4*s.Fs/hopSize
+        #s.getMFCCNoveltyFn(winSize, hopSize, 8000)
+        s.getLibrosaNoveltyFn(winSize, hopSize)
+        W = 2*s.Fs/hopSize
         theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, parpool, gaussWin, denoise = True, doPlot = False)
         (onsets, score) = getOnsetsDP(theta, s, 6, 0.4)
         dponsets =  s.getDynamicProgOnsets()
@@ -121,6 +122,6 @@ def runTests(audioFiles, annotations, resprefix, toskip, parpool):
 
 if __name__ == '__main__':
     parpool = Pool(processes = 8)
-    #(audioFiles, annotations) = getBallroomData()
-    (audioFiles, annotations) = getSMCData()
-    runTests(audioFiles, annotations, "Results/Test2", [212], parpool)
+    (audioFiles, annotations) = getBallroomData()
+    #(audioFiles, annotations) = getSMCData()
+    runTests(audioFiles, annotations, "Results/Test1_LibrosaOnset_FixedPCA_Extending", [212], parpool)

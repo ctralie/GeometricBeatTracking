@@ -8,6 +8,10 @@ import subprocess
 import os
 import time
 
+##Onset detection functions
+
+
+
 BATCHSIZE = 50 #Batch size for computing left hand singular vectors, tradeoff between memory and speed
 
 class BeatingSound(object):
@@ -55,6 +59,16 @@ class BeatingSound(object):
         self.novFn = np.sum(diff, 0).flatten()
         self.origNovFn = np.array(self.novFn)
     
+    def getLibrosaNoveltyFn(self, winSize, hopSize):
+        [self.winSize, self.hopSize] = [winSize, hopSize]
+        self.novFn = librosa.onset.onset_strength(y = self.XAudio, sr = self.Fs, hop_length = hopSize)
+        self.origNovFn = np.array(self.novFn)
+    
+    def getComplexNoveltyFn(self, winSize, hopSize, pfmax):
+        self.S = librosa.core.stft(self.XAudio, winSize, hopSize)
+        diff = self.S[:, 1:] - self.S[:, 0:-1]
+        
+    
     #Call librosa to get the dynamic programming onsets for comparison
     def getDynamicProgOnsets(self):
         (tempo, beats) = librosa.beat.beat_track(self.XAudio, self.Fs, hop_length = self.hopSize)
@@ -96,13 +110,18 @@ class BeatingSound(object):
         sio.wavfile.write("%s.wav"%outprefix, self.Fs, self.XAudio)        
     
     def exportOnsetClicks(self, outname, onsets):
+        print "Fs = ", self.Fs
         YAudio = np.array(self.XAudio)
-        blip = np.cos(2*np.pi*np.arange(self.hopSize*4)*440.0/self.Fs)
+        blipsamples = int(np.round(0.02*self.Fs))
+        blip = np.cos(2*np.pi*np.arange(blipsamples)*440.0/self.Fs)
         blip = np.array(blip*np.max(np.abs(YAudio)), dtype=YAudio.dtype)
         for idx in onsets:
-            l = len(YAudio[idx*self.hopSize:(idx+4)*self.hopSize])
-            YAudio[idx*self.hopSize:(idx+4)*self.hopSize] = blip[0:l]
-        sio.wavfile.write(outname, self.Fs, YAudio)
+            l = len(YAudio[idx*self.hopSize:idx*self.hopSize+blipsamples])
+            YAudio[idx*self.hopSize:idx*self.hopSize+blipsamples] = blip[0:l]
+        sio.wavfile.write("temp.wav", self.Fs, YAudio)
+        if os.path.exists(outname):
+            os.remove(outname)
+        subprocess.call(["avconv", "-i", "temp.wav", outname])
     
     def getSlidingWindowLeftSVD(self, W):
         #Calculate the left hand singular vectors of the sliding window of
@@ -145,12 +164,26 @@ class BeatingSound(object):
         M = N-W+1
         self.V = np.zeros((NPCs, M))
         UT = self.Y.T[0:NPCs, :]
+        tic = time.time()
         for i in range(W):
             #Sum together outer products
             UTi = UT[:, i].flatten()
             x = self.novFn[i:i+M]
             self.V += UTi[:, None].dot(x[None, :])
+        self.V = (1/self.S[0:NPCs, None])*self.V
+        toc = time.time()
+        print "Elapsed time right SVD: ", toc-tic
         return self.V
+    
+    def getSlidingWindowFull(self, W):
+        #Return the mean-centered sliding window
+        N = len(self.novFn)
+        M = N-W+1
+        X = np.zeros((W, M))
+        for i in range(W):
+            X[i, :] = self.novFn[i:i+M]
+        X = X - np.mean(X, 1, keepdims = True)
+        return X
     
     #Apply Gaussian smoothing to the novelty function
     def smoothNovFn(self, W):
@@ -158,6 +191,15 @@ class BeatingSound(object):
         g = np.exp(-t**2/0.25)
         g = g/np.sum(g)
         self.novFn = np.convolve(self.origNovFn, g, 'same')
+    
+    def lowpassNovFn(self, W):
+        #Do an ideal lowpass filter on blocks of the novelty function
+        f = np.fft.fft(self.origNovFn)
+        N = len(f)
+        fidx = int(np.round((1.0/W)*N))
+        f[fidx:-fidx] = 0
+        self.novFn = np.abs(np.fft.ifft(f))
+        
     
     #Find the nearest valid delay embedding only using certain principal components
     #idxs is the indices of the principal components to use

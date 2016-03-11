@@ -78,13 +78,11 @@
 			reader.onload = function(e) {
 				var fields = reader.result.split(",");
 				var N = (fields.length-1)/2;
-				X = numeric.rep([N, 3]);
+				X = numeric.rep([N, 2]);
 				var theta = 0.0;
 				for (var i = 0; i < N; i++) {
-					X[i][2] = parseFloat(fields[i*2+1]);
-					theta = parseFloat(fields[i*2]);
-					X[i][0] = W/2 + R*Math.cos(theta);
-					X[i][1] = H/2 + R*Math.sin(theta);
+				    X[i][0] = parseFloat(fields[i*2]); //Theta
+					X[i][1] = parseFloat(fields[i*2+1]); //Time
 				}
 			}
 			reader.readAsText(file);	
@@ -103,9 +101,17 @@
             //If paused allow scrolling around
             playTime = offsetTime;
         }
-		while (X[playIdx][2] < playTime && playIdx < X.length - 1) {
+		while (X[playIdx][1] < playTime && playIdx < X.length - 1) {
 			playIdx++;
 		}
+        
+        //CLERP: Circular linear interpolation
+        if (playIdx >= X.length-1) {
+            return;
+        }
+        var dTL = X[playIdx][1] - playTime;
+        var dT = X[playIdx+1][1]-X[playIdx][1];
+        var theta = (dTL/dT)*X[playIdx][0] + ((dT-dTL)/dT)*X[playIdx+1][0];
         
         var W = canvas.width;
         var H = canvas.height;
@@ -116,7 +122,7 @@
 
         ctx.fillStyle = "#FF0000";
         var dW = 10;
-        ctx.fillRect(X[playIdx][0]-dW, X[playIdx][1]-dW, dW*2+1, dW*2+1);
+        ctx.fillRect(W/2 + R*Math.cos(theta)-dW, H/2+R*Math.sin(theta)-dW, dW*2+1, dW*2+1);
     }
     
     function playAudioButton() {

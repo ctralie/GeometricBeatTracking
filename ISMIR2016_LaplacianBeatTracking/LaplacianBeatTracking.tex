@@ -16,7 +16,7 @@
 
 % Title.
 % ------
-\title{Topological Beat Tracking with Laplacian Circular Coordinates}
+\title{Beat Phase Modeling with Laplacian Circular Coordinates}
 
 % Note: Please do NOT use \thanks or a \footnote in any of the author markup
 
@@ -66,11 +66,45 @@
 \maketitle
 %
 \begin{abstract}
-The abstract should be placed at the top left column and should contain about 150-200 words.
+In this work, we introduce a geometric technique for automatically modeling musical audio {\em beat phase}, which is the distance of each audio sample to the next occurring beat onset.  We show that sliding window embeddings of typical audio novelty functions form topological loops in the sliding window embedding space, and we use the principal components of these embeddings to visualize and animate beats as they evolve.  For more precise estimates of beat phase, we build a nearest neighbor graph in the sliding window embedding space, and we use the eigenvectors corresponding to the two smallest nonzero eigenvalues of the graph Laplacian to put circular coordinates on each window, which can be post-processed into a continuous estimate of beat phase.  A dynamic programming algorithm can then be used to extract beat onsets by trading off audio novelty and closeness of inter-onset-intervals to one full revolution of the circle.  At this stage, it is also possible to model multiscale tempo hierarchies, and we provide a double pendulum GUI to visualize this.  %We report state of the art results both in beat onset detection and tempo estimation using this technique.
 \end{abstract}
 %
 \section{Introduction}\label{sec:introduction}
 
+Automatic beat tracking in musical audio is a surprisingly difficult problem due to the highly dynamic nature of music.  Many transient events occur in a short amount of time which can distract from the main beat onsets, so naive techniques that do peak picking in an energy differential function are doomed to fail.  A litany of sophisticated work has addressed this
+
+In this work, we provide a different perspective on this problem.  We use tools from nonlinear time series analysis to cast the problem of beat modeling as tracing curves around loops in high dimensions.   
+
+\section{Background}
+
+Talk about novelty functions, beat tracking techniques
+
+Define map from audio to the circle
+
+\section{Sliding Windows on Novelty Functions}
+
+\subsection{Geometry of Sliding Windows of Periodic Functions}
+
+Show SSM and PCA on audio novelty functions
+
+\subsection{Face Jam GUI}
+
+\subsection{Sliding window denoising}
+
+
+\section{Laplacian Circular Coordinates}
+
+\subsection{Graph Laplacians}
+
+\subsection{Merging Sliding Window Blocks}
+
+\subsection{Metrical Hierarchies / Pendulum GUI}
+
+
+\section{Dynamic Programming Onset Extraction}
+
+
+\section{Beat Tracking Evaluation}
 
 %\begin{table}
 % \begin{center}

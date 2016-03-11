@@ -9,6 +9,7 @@ from SyntheticFunctions import *
 from SoundTools import *
 from DynProgOnsets import *
 from multiprocessing import Pool
+from sklearn.decomposition import PCA
 
 EIG1 = 1
 EIG2 = 2
@@ -145,7 +146,7 @@ def getOnsetsPassingAngle(t, angle):
     return idx
 
 def getCircularCoordinatesBlock(args):
-    (X, Normalize) = args
+    (X, Normalize, Kappa) = args
     NEig = 4
     #Compute SSM
     XSum = np.sum(X**2, 0)
@@ -155,7 +156,7 @@ def getCircularCoordinatesBlock(args):
     D = XSum[:, None] + XSum[None, :] - 2*(X.T.dot(X))
     
     #Compute spectral decomposition
-    A = SSMToBinaryMutual(D, 0.1)
+    A = SSMToBinaryMutual(D, Kappa)
     #A = np.exp(-D*10)
     A[range(1, D.shape[0]), range(D.shape[0]-1)] = 1
     A[range(D.shape[0]-1), range(1, D.shape[0])] = 1
@@ -227,36 +228,46 @@ def medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop):
         currIdx[idxs[i]] += 1
     return scipy.stats.nanmedian(theta, 0)
 
+def extendThetas(theta, N):
+    N1 = len(theta)
+    theta2 = np.zeros(N)
+    theta2[0:N1] = theta
+    slope = (theta[-1]-theta[0])/float(N1)
+    theta2[N1:N] = theta[-1] + slope*np.arange(N-N1)
+    return theta2
+
 #Do circular coordinates in a sliding window and aggregate the results
 #in a consistent way
-def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussWin = 1, Normalize = True, denoise = True, doPlot = True):
+def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussWin = 1, Normalize = True, denoise = True, doPlot = True, Kappa = 0.1):
     #Step 0: Perform Sliding Window Denoising
     novFnOrig = np.array(s.novFn)
     if denoise:
         orig = s.origNovFn
         if gaussWin > 1:            
             s.smoothNovFn(gaussWin)
-        s.getSlidingWindowLeftSVD(W)
-        s.getSlidingWindowRightSVD(W, NPCs)
-        s.novFn = s.slidingWindowDenoising(np.arange(NPCs))
-        s.novFn = s.novFn - np.min(s.novFn)
-        
-        if doPlot:
-            plt.clf()
-            idx = np.arange(len(orig))*float(s.hopSize)/s.Fs
-            plt.plot(idx, orig/np.max(np.abs(orig)))
-            plt.hold(True)
-            plt.plot(idx, s.novFn/np.max(np.abs(s.novFn)))
-            plt.xlabel('Time (Seconds)')
-            plt.title('Sliding Window Smoothing')
-            plt.show()
+            if doPlot:
+                plt.clf()
+                plt.plot(s.origNovFn, 'b')
+                plt.hold(True)
+                plt.plot(s.novFn, 'g')
+                plt.title('Smoothed by %i'%gaussWin)
+                plt.show()
     
     #Step 1: Perform PCA on a sliding window over the entire song
-    (U, S) = s.getSlidingWindowLeftSVD(W)
-    SMat = np.eye(NPCs)
-    np.fill_diagonal(SMat, S[0:NPCs])
-    V = s.getSlidingWindowRightSVD(W, NPCs)
-    X = U[:, 0:NPCs].dot(SMat).dot(V)
+    X = s.getSlidingWindowFull(W)
+    if NPCs > 0:
+        if doPlot:
+            (U, S) = s.getSlidingWindowLeftSVD(W)
+            plt.clf()
+            plt.plot(np.cumsum(S)/np.sum(S))
+            plt.hold(True)
+            plt.plot(np.arange(len(S)), 0.4*np.ones(len(S)), 'g')
+            plt.plot(np.arange(len(S)), 0.8*np.ones(len(S)), 'g')
+            plt.title('Singular Values')
+            plt.show()
+        pca = PCA(n_components = 20)
+        X = pca.fit_transform(X.T).T
+                
     Ds = []
     Ls = []
     vs = []
@@ -276,7 +287,7 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussW
     for i in range(NBlocks):
         Blocks.append(np.array(X[:, idxs[i]]))
     Normalize = True
-    args = zip(Blocks, [Normalize]*len(Blocks))
+    args = zip(Blocks, [Normalize]*len(Blocks), [Kappa]*len(Blocks))
     res = parpool.map(getCircularCoordinatesBlock, args)
     for i in range(NBlocks):
         (D, L, v, theta) = res[i]
@@ -318,6 +329,7 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussW
 
     #Step 4: Finish merging all of the blocks by taking the median of values at the same time coordinate
     theta = medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop)
+    theta = extendThetas(theta, len(s.novFn))
     #Fill in nan values with zero order hold (not the best but gets the job done)
     if np.isnan(theta[0]):
         theta[0] = 0
@@ -328,58 +340,3 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussW
         plt.plot(theta)
         plt.show()
     return theta
-
-if __name__ == "__main__":
-    np.random.seed(100)
-    T = 200
-    NPCs = 20
-    noiseSigma = 0.05
-    gaussSigma = 3
-    #(gtPulses, x) = getSyntheticPulseTrainFreqAmpDrift(5000, T-30, T+30, 1, 1, noiseSigma, gaussSigma)
-    #(gtPulses2, x2) = getSyntheticPulseTrainFreqAmpDrift(5000, T/2, T/2, 1, 1, 0, gaussSigma)
-    #gtPulses += gtPulses2
-    #x += 0.5*x2
-    (gtPulses, x) = getSyntheticPulseTrainRandMicrobeats(5000, T, noiseSigma, gaussSigma)
-    gtOnsets = np.arange(len(gtPulses))
-    gtOnsets = gtOnsets[gtPulses > 0]
-    
-    plt.plot(gtPulses)
-    plt.show()
-    x = x - np.mean(x)
-    s = BeatingSound()
-    s.novFn = x
-    s.Fs = 300
-    s.hopSize = 1
-
-    W = 300
-    theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, doPlot = False)
-    (onsets, score) = getOnsetsDP(theta, s, 6)
-    #TODO: Extract onsets
-    plotCircularCoordinates2(s, theta, onsets, gtOnsets)
-    
-#    (D, L, v, theta) = getCircularCoordinates(s, W, NPCs)
-#    plt.subplot(311)
-#    plt.plot(theta)
-#    plt.title('Original Theta')
-#    
-#    plt.subplot(312)
-#    plt.plot(theta2)
-#    plt.title('TV Theta')
-#    plt.subplot(313)
-#    plt.plot(theta2 - theta)
-#    plt.title('Difference')
-#    plt.show()
-#    theta = theta2
-#    
-#    (angles, scores, scoresFinal) = scoreAngles(s, theta, 1000)
-#    transitionAngle = angles[np.argmax(scoresFinal)]
-#    
-#    print "transitionAngle = ", transitionAngle*180/np.pi
-#    onsets = getOnsetsPassingAngle(theta, transitionAngle)
-#    
-##    plt.subplot(121)
-##    plt.plot(np.arange(len(theta)), 180*(theta%2*np.pi)/np.pi, 'b')
-##    plt.hold(True)
-##    plt.plot([0, len(theta)], [transitionAngle*180/np.pi, transitionAngle*180/np.pi], 'r')
-#    
-#    plotCircularCoordinates(s, D, v, theta, onsets, gtOnsets)
