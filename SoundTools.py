@@ -1,4 +1,3 @@
-import librosa
 import numpy as np
 import numpy.linalg as linalg
 import scipy.io as sio
@@ -8,7 +7,11 @@ import subprocess
 import os
 import time
 
-##Onset detection functions
+import librosa
+
+import essentia
+from essentia import Pool, array
+from essentia.standard import *
 
 
 
@@ -64,10 +67,28 @@ class BeatingSound(object):
         self.novFn = librosa.onset.onset_strength(y = self.XAudio, sr = self.Fs, hop_length = hopSize)
         self.origNovFn = np.array(self.novFn)
     
-    def getComplexNoveltyFn(self, winSize, hopSize, pfmax):
+    def getWeightedPhaseNoveltyFn(self, winSize, hopSize):
         self.S = librosa.core.stft(self.XAudio, winSize, hopSize)
-        diff = self.S[:, 1:] - self.S[:, 0:-1]
-        
+        (mag, phase) = librosa.magphase(self.S)
+        insfreq = phase[:, 1:] - phase[:, 0:-1]
+        insfreqp = insfreq[:, 1:] - insfreq[:, 0:-1]
+        WP = mag[:, 0:insfreqp.shape[1]]*insfreqp
+        self.novFn = np.mean(np.abs(WP), 0)
+        self.novFn = self.novFn/np.max(self.novFn)
+        self.origNovFn = np.array(self.novFn)
+    
+    def getEssentiaNoveltyFn(self, hopSize, m):
+        od = OnsetDetection(method=m)
+        w = Windowing(type='hann')
+        fft = FFT()
+        c2p = CartesianToPolar()
+        X = essentia.array(self.XAudio)
+        self.novFn = []
+        for frame in FrameGenerator(X, frameSize = 1024, hopSize = hopSize):
+            mag, phase, = c2p(fft(w(frame)))
+            self.novFn.append(od(mag, phase))
+        self.novFn = self.novFn/np.max(self.novFn)
+        self.origNovFn = np.array(self.novFn)
     
     #Call librosa to get the dynamic programming onsets for comparison
     def getDynamicProgOnsets(self):

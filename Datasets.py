@@ -77,7 +77,10 @@ def checkForDirectory(filename):
 def runTests(audioFiles, annotations, resprefix, toskip, parpool):
     hopSize = 128
     winSize = 2*2048
-    NPCs = 60
+    NPCs = 0
+    pca = None
+    if NPCs > 0:
+        pca = PCA(n_components = NPCs)
     N = len(audioFiles)
     myonsets = []
     alldponsets = []
@@ -101,7 +104,7 @@ def runTests(audioFiles, annotations, resprefix, toskip, parpool):
         #s.getMFCCNoveltyFn(winSize, hopSize, 8000)
         s.getLibrosaNoveltyFn(winSize, hopSize)
         W = 2*s.Fs/hopSize
-        theta = getCircularCoordinatesBlocks(s, W, NPCs, 600, 100, parpool, gaussWin, denoise = True, doPlot = False)
+        theta = getCircularCoordinatesBlocks(s, W, pca, 600, 100, parpool, gaussWin, denoise = True, doPlot = False)
         (onsets, score) = getOnsetsDP(theta, s, 6, 0.4)
         dponsets =  s.getDynamicProgOnsets()
         #Output clicks
@@ -124,4 +127,4 @@ if __name__ == '__main__':
     parpool = Pool(processes = 8)
     (audioFiles, annotations) = getBallroomData()
     #(audioFiles, annotations) = getSMCData()
-    runTests(audioFiles, annotations, "Results/Test1_LibrosaOnset_FixedPCA_Extending", [212], parpool)
+    runTests(audioFiles, annotations, "Results/Test1_LibrosaOnset_NoPCA_Extending", [212], parpool)

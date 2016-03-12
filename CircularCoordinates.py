@@ -238,7 +238,7 @@ def extendThetas(theta, N):
 
 #Do circular coordinates in a sliding window and aggregate the results
 #in a consistent way
-def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussWin = 1, Normalize = True, denoise = True, doPlot = True, Kappa = 0.1):
+def getCircularCoordinatesBlocks(s, W, pca, BlockLen, BlockHop, parpool, gaussWin = 1, Normalize = True, denoise = True, doPlot = True, Kappa = 0.1):
     #Step 0: Perform Sliding Window Denoising
     novFnOrig = np.array(s.novFn)
     if denoise:
@@ -255,7 +255,7 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussW
     
     #Step 1: Perform PCA on a sliding window over the entire song
     X = s.getSlidingWindowFull(W)
-    if NPCs > 0:
+    if pca:
         if doPlot:
             (U, S) = s.getSlidingWindowLeftSVD(W)
             plt.clf()
@@ -265,7 +265,6 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussW
             plt.plot(np.arange(len(S)), 0.8*np.ones(len(S)), 'g')
             plt.title('Singular Values')
             plt.show()
-        pca = PCA(n_components = 20)
         X = pca.fit_transform(X.T).T
                 
     Ds = []
@@ -288,9 +287,10 @@ def getCircularCoordinatesBlocks(s, W, NPCs, BlockLen, BlockHop, parpool, gaussW
         Blocks.append(np.array(X[:, idxs[i]]))
     Normalize = True
     args = zip(Blocks, [Normalize]*len(Blocks), [Kappa]*len(Blocks))
-    res = parpool.map(getCircularCoordinatesBlock, args)
+    #res = parpool.map(getCircularCoordinatesBlock, args)
     for i in range(NBlocks):
-        (D, L, v, theta) = res[i]
+        (D, L, v, theta) = getCircularCoordinatesBlock((Blocks[i], Normalize, Kappa))
+        #(D, L, v, theta) = res[i]
         BlockAngles.append(theta)
         Ds.append(D)
         Ls.append(L)
