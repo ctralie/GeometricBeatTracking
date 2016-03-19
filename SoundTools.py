@@ -55,6 +55,9 @@ class BeatingSound(object):
         arg = self.M.dot(np.abs(self.S))
         self.X = librosa.core.logamplitude(arg)
     
+    ######################################################
+    ##               Novelty Functions                  ##
+    ######################################################
     def getMFCCNoveltyFn(self, winSize, hopSize, pfmax):
         self.processSpecgram(winSize, hopSize, pfmax)
         diff = self.X[:, 1:] - self.X[:, 0:-1]
@@ -78,6 +81,7 @@ class BeatingSound(object):
         self.origNovFn = np.array(self.novFn)
     
     def getEssentiaNoveltyFn(self, hopSize, m):
+        #Options: hfc, complex, complex_phase, flux, melflux, rms
         od = OnsetDetection(method=m)
         w = Windowing(type='hann')
         fft = FFT()
@@ -90,16 +94,40 @@ class BeatingSound(object):
         self.novFn = self.novFn/np.max(self.novFn)
         self.origNovFn = np.array(self.novFn)
     
+    
+    ######################################################
+    ##           External  Onset Functions              ##
+    ######################################################
+    #Other implementations that I'm comparing to
+    
     #Call librosa to get the dynamic programming onsets for comparison
-    def getDynamicProgOnsets(self):
+    def getEllisLibrosaOnsets(self):
         (tempo, beats) = librosa.beat.beat_track(self.XAudio, self.Fs, hop_length = self.hopSize)
         return beats
+    
+    #Call Essentia's implementation of Degara's technique
+    def getDegaraOnsets(self):
+        X = essentia.array(self.XAudio)
+        b = BeatTrackerDegara()
+        beats = np.array(np.round(b(X)*self.Fs/self.hopSize), dtype=np.int64)
+        return beats
+    
+    #Call the multi feature beat tracker in Essentia
+    def getMultiFeatureOnsets(self):
+        X = essentia.array(self.XAudio)
+        b = BeatTrackerMultiFeature()
+        beats = np.array(np.round(b(X)[0]*self.Fs/self.hopSize), dtype=np.int64)
+        return beats        
     
     def getSampleDelay(self, i):
         if i == -1:
             i = self.Y.shape[0]-1
         return float(i)*self.hopSize/self.Fs
 
+
+    ######################################################
+    ##               Exporting Functions                ##
+    ######################################################
     def exportToFnViewer(self, filename, X = None):
         if not X:
             #By default, export novelty function
@@ -144,6 +172,17 @@ class BeatingSound(object):
             os.remove(outname)
         subprocess.call(["avconv", "-i", "temp.wav", outname])
     
+    def plotOnsets(self, onsets, theta):
+        #Plot a stem plot of the onsets on x-axis, and corresponding
+        #circular coordinates on y-axis
+        plt.clf()
+        onsetsSec = onsets*float(self.hopSize)/self.Fs
+        vals = theta[onsets]
+        plt.stem(onsetsSec, vals)
+    
+    ######################################################
+    ##       Sliding Window PCA/SVD Functions           ##
+    ######################################################
     def getSlidingWindowLeftSVD(self, W):
         #Calculate the left hand singular vectors of the sliding window of
         #the novelty function
@@ -206,6 +245,9 @@ class BeatingSound(object):
         X = X - np.mean(X, 1, keepdims = True)
         return X
     
+    ######################################################
+    ##               Novelty Smoothing                  ##
+    ######################################################
     #Apply Gaussian smoothing to the novelty function
     def smoothNovFn(self, W):
         t = np.linspace(-1, 1, W)

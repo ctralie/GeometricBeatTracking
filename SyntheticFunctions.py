@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from SoundTools import *
+from CircularCoordinates import *
 
 def getPulseTrain(NSamples, TMin, TMax, AmpMin, AmpMax):
     x = np.zeros(NSamples)
@@ -44,29 +45,42 @@ def getSyntheticPulseTrainRandMicrobeats(NSamples, T, noiseSigma, gaussSigma):
             x[i] = 0.5
     y = convolveAndAddNoise(x, gaussSigma, noiseSigma)
     return (x, y)
+
+
+def getSyntheticPulseTrainPerfectMicrobeats(NSamples, T, noiseSigma, gaussSigma):
+    x = getPulseTrain(NSamples, T, T, 1, 1)
+    x += getPulseTrain(NSamples, T/2, T/2, 1, 1)
+    y = convolveAndAddNoise(x, gaussSigma, noiseSigma)
+    return (x, y)
+
 if __name__ == "__main__":
     np.random.seed(100)
     T = 300
     NPCs = 20
     noiseSigma = 0.1
     gaussSigma = 3
-    x = getSyntheticPulseTrain(10000, T, noiseSigma, gaussSigma)
+    (x, y) = getSyntheticPulseTrainPerfectMicrobeats(10000, T, noiseSigma, gaussSigma)
     s = BeatingSound()
-    s.novFn = x
-
-    W = 200
-    (Y, S) = s.getSlidingWindowLeftSVD(W)
-    V = s.getSlidingWindowRightSVD(W, NPCs)
+    s.novFn = y
+    s.origNovFn = y
+    s.hopSize = 128
+    s.Fs = 44100
     
-    plt.subplot(221)
-    plt.imshow(Y[:, 0:40], interpolation = 'none', aspect = 'auto')
-    plt.subplot(222)
-    plt.plot(V[0, :], V[1, :])
+    NPCs = 0
+    pca = None
+    if NPCs > 0:
+        pca = PCA(n_components = NPCs)
+    gaussWin = 20
+    W = 600
     
-    y = s.performDenoising(np.arange(2))
-    plt.subplot(223)
-    plt.plot(x)
-    plt.subplot(224)
-    plt.plot(y)
-    
-    plt.show()
+    for Kappa in [0.01, 0.025, 0.05, 0.1, 0.2]:
+        theta = getCircularCoordinatesBlocks(s, W, pca, 600, 100, None, 3, denoise = True, doPlot = True, Kappa = Kappa)
+        (onsets, score) = getOnsetsDP(theta, s, 6, 0.4)
+        plt.clf()
+        plt.subplot(211)
+        plt.plot(y)
+        plt.subplot(212)
+        onsetsSec = onsets*float(s.hopSize)/s.Fs
+        vals = theta[onsets]
+        plt.stem(onsetsSec, vals)
+        plt.show()

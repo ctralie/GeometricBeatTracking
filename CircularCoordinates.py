@@ -255,6 +255,16 @@ def getCircularCoordinatesBlocks(s, W, pca, BlockLen, BlockHop, parpool, gaussWi
     
     #Step 1: Perform PCA on a sliding window over the entire song
     X = s.getSlidingWindowFull(W)
+#    n = np.array(s.origNovFn)
+#    for m in ['hfc', 'complex', 'complex_phase', 'flux', 'rms']:
+#        s.getEssentiaNoveltyFn(s.hopSize, m)
+#        Y = s.getSlidingWindowFull(W)[:, 0:X.shape[1]]
+#        X = np.concatenate((X, Y), 0)
+#        n += s.origNovFn[0:n.size]
+#    s.origNovFn = n
+#    plt.clf()
+#    plt.plot(s.origNovFn)
+#    plt.show()
     if pca:
         if doPlot:
             (U, S) = s.getSlidingWindowLeftSVD(W)
@@ -266,7 +276,7 @@ def getCircularCoordinatesBlocks(s, W, pca, BlockLen, BlockHop, parpool, gaussWi
             plt.title('Singular Values')
             plt.show()
         X = pca.fit_transform(X.T).T
-                
+    
     Ds = []
     Ls = []
     vs = []

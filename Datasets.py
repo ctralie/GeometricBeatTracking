@@ -74,7 +74,43 @@ def checkForDirectory(filename):
         if not os.path.exists(p):
             os.mkdir(p)
 
-def runTests(audioFiles, annotations, resprefix, toskip, parpool):
+#Run other systems for comparison
+def runReferenceTests(audioFiles, annotations, resprefix, toskip, parpool):
+    N = len(audioFiles)
+    dponsets = []
+    dgonsets = []
+    multionsets = []
+    gtannotations = []
+    for i in range(N):
+        if i in toskip:
+            continue
+        print "Doing %i of %i"%(i, N)
+        gtannotations.append(annotations[i])
+        s = BeatingSound()
+        s.loadAudio(audioFiles[i])
+        dponsets.append(s.getEllisLibrosaOnsets())
+        dgonsets.append(s.getDegaraOnsets())
+        multionsets.append(s.getMultiFeatureOnsets())
+        
+        #Output clicks
+        #s.exportOnsetClicks("%s_DP.ogg"%audioFiles[i], dponsets[-1])
+        #s.exportOnsetClicks("%s_DG.ogg"%audioFiles[i], dgonsets[-1])
+        #s.exportOnsetClicks("%s_Multi.ogg"%audioFiles[i], multionsets[-1])
+    arrs = [dponsets, dgonsets, multionsets]
+    for arr in arrs:
+        #Convert to seconds
+        for i in range(len(arr)):
+            arr[i] = arr[i]*s.hopSize/float(s.Fs)
+    print "\n\n=================DYNAMIC PROGRAMMING RESULTS=============\n\n"
+    DpRes = be.evaluate_db(gtannotations, dponsets, 'all', False)
+    print "\n\n=================    DEGARA RESULTS    =============\n\n"
+    DgRes = be.evaluate_db(gtannotations, dgonsets, 'all', False)
+    print "\n\n=================    MULTI RESULTS    =============\n\n"
+    DgRes = be.evaluate_db(gtannotations, multionsets, 'all', False)
+
+
+#Evaluate my algorithm on a particular dataset
+def runMyTests(audioFiles, annotations, resprefix, toskip, parpool):
     hopSize = 128
     winSize = 2*2048
     NPCs = 0
@@ -83,7 +119,6 @@ def runTests(audioFiles, annotations, resprefix, toskip, parpool):
         pca = PCA(n_components = NPCs)
     N = len(audioFiles)
     myonsets = []
-    alldponsets = []
     gtannotations = []
     gaussWin = 20
     for i in range(N):
@@ -106,25 +141,20 @@ def runTests(audioFiles, annotations, resprefix, toskip, parpool):
         W = 2*s.Fs/hopSize
         theta = getCircularCoordinatesBlocks(s, W, pca, 600, 100, parpool, gaussWin, denoise = True, doPlot = False)
         (onsets, score) = getOnsetsDP(theta, s, 6, 0.4)
-        dponsets =  s.getDynamicProgOnsets()
         #Output clicks
         s.exportOnsetClicks("%s/%s_My.ogg"%(resprefix, audioFiles[i]), onsets)
-        s.exportOnsetClicks("%s_DP.ogg"%audioFiles[i], dponsets)
         #Convert to seconds
         onsets = onsets*s.hopSize/float(s.Fs)
-        dponsets = dponsets*s.hopSize/float(s.Fs)
-        sio.savemat(matfile, {"onsets":onsets, "dponsets":dponsets})
+        sio.savemat(matfile, {"onsets":onsets})
         #Do evaluation
         myonsets.append(onsets)
-        alldponsets.append(dponsets)
     for i in range(len(myonsets)):
         myonsets[i] = myonsets[i].flatten()
     MyRes = be.evaluate_db(gtannotations, myonsets, 'all', False)
-    DpRes = be.evaluate_db(gtannotations, alldponsets, 'all', False)
-    return (MyRes, DpRes)
+    return MyRes
 
 if __name__ == '__main__':
     parpool = Pool(processes = 8)
     (audioFiles, annotations) = getBallroomData()
     #(audioFiles, annotations) = getSMCData()
-    runTests(audioFiles, annotations, "Results/Test1_LibrosaOnset_NoPCA_Extending", [212], parpool)
+    runReferenceTests(audioFiles, annotations, "Results/Test1_LibrosaOnset_NoPCA_Extending", [212], parpool)

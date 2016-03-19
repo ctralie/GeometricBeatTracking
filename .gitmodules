@@ -4,3 +4,6 @@
 [submodule "Datasets/BallroomAnnotations"]
 	path = Datasets/BallroomAnnotations
 	url = https://github.com/CPJKU/BallroomAnnotations.git
+[submodule "LaplacianSimulations/S3DGLPy"]
+	path = LaplacianSimulations/S3DGLPy
+	url = https://github.com/ctralie/S3DGLPy.git
