@@ -65,7 +65,10 @@ def TwoCircleExample():
     r2 = 0.5
     X1 = r1*CircleExample(30)
     X2 = np.array([[r1+r2],[0]]) + r2*CircleExample(30)
-    return np.concatenate((X1, X2), 1)
+    X = np.concatenate((X1, X2), 1)
+    np.random.seed(10)
+    X = X + 0.1*np.random.randn(X.shape[0], X.shape[1])
+    return X
 
 if __name__ == '__main__':
     X = TwoCircleExample()
@@ -83,7 +86,8 @@ if __name__ == '__main__':
     i = 0
     for Kappa in ds:
         print "Kappa = ", Kappa
-        (D, A, L, v, theta) = getCircularCoordinatesBlock((X, True, Kappa, None))
+        (D, A, L, v, theta) = getCircularCoordinatesBlock((X, False, Kappa, None))
+        sio.savemat("L%i.mat"%i, {"L":L})
         plt.clf()
         plotResults(X, D, A, v, theta, Kappa)
         plt.savefig("%i.png"%i, dpi=150)

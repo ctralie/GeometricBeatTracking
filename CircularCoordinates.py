@@ -20,10 +20,13 @@ def SSMToBinary(D, Kappa):
     N = D.shape[0]
     if Kappa == 0:
         return np.ones((N, N))
+    #Take one additional neighbor to account for the fact
+    #that the diagonal of the SSM is all zeros
     elif Kappa < 1:
-        NNeighbs = int(np.round(Kappa*N))
+        NNeighbs = int(np.round(Kappa*N))+1
     else:
-        NNeighbs = Kappa
+        NNeighbs = Kappa+1
+    NNeighbs = min(N, NNeighbs)
     cols = np.argsort(D, 1)
     temp, rows = np.meshgrid(np.arange(N), np.arange(N))
     cols = cols[:, 0:NNeighbs].flatten()
@@ -32,13 +35,17 @@ def SSMToBinary(D, Kappa):
     ret[rows, cols] = 1
     return ret
 
-def SSMToBinaryMutual(D, Kappa):
+def getAdjacencyKappa(D, Kappa):
     B1 = SSMToBinary(D, Kappa)
     B2 = SSMToBinary(D.T, Kappa)
-    return B1*B2.T
+    ret = B1*B2.T
+    np.fill_diagonal(ret, 0)
+    return ret
 
-def SSMToBinarySigma(D, Sigma):
-    return np.array(D < Sigma, dtype=np.float64)
+def getAdjacencySigma(D, Sigma):
+    ret = np.array(D < Sigma, dtype=np.float64)
+    np.fill_diagonal(ret, 0)
+    return ret
 
 def plotAdjacencyEdgesPCA(D, A, s):
     #Plot the adjacency matrix on top of the point cloud after PCA
@@ -191,9 +198,9 @@ def getOnsetsPassingAngle(t, angle):
     return idx
 
 def getCircularCoordinatesBlock(args):
-    AddTimeEdges = True
+    AddTimeEdges = False
     (X, Normalize, Kappa, s) = args
-    NEig = 4
+    NEig = 3
     #Compute SSM
     XSum = np.sum(X**2, 0)
     if Normalize:
@@ -204,7 +211,7 @@ def getCircularCoordinatesBlock(args):
     D = np.sqrt(D)
     
     #Compute spectral decomposition
-    A = SSMToBinarySigma(D, Kappa)
+    A = getAdjacencySigma(D, Kappa)
     #A = np.exp(-D*10)
     if AddTimeEdges:
         A[range(1, D.shape[0]), range(D.shape[0]-1)] = 1
