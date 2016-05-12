@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.io as sio
 import scipy.sparse
 import scipy.stats
 import scipy.sparse.linalg as slinalg
@@ -36,6 +37,9 @@ def SSMToBinaryMutual(D, Kappa):
     B2 = SSMToBinary(D.T, Kappa)
     return B1*B2.T
 
+def SSMToBinarySigma(D, Sigma):
+    return np.array(D < Sigma, dtype=np.float64)
+
 def plotAdjacencyEdgesPCA(D, A, s):
     #Plot the adjacency matrix on top of the point cloud after PCA
     [I, J] = np.meshgrid(np.arange(A.shape[0]), np.arange(A.shape[0]))
@@ -59,6 +63,19 @@ def plotAdjacencyEdgesPCA(D, A, s):
     plt.subplot(222)
     plt.plot(s.novFn)
     plt.title('Original Function')
+    plt.show()
+
+def plotAdjacencyEdgesGraph(A):
+    import networkx as nx
+    N = A.shape[0]
+    [I, J] = np.meshgrid(np.arange(N), np.arange(N))
+    I = I[A > 0]
+    J = J[A > 0]
+    elist = [(I[i], J[i]) for i in range(len(I))]
+    G = nx.Graph()
+    G.add_nodes_from(np.arange(N))
+    G.add_edges_from(elist)
+    nx.draw_spectral(G, node_color = np.arange(N))
     plt.show()
 
 def plotEigenvectors(v, NEig):
@@ -95,7 +112,7 @@ def plotCircularCoordinates(s, D, v, theta, onsets, gtOnsets):
     plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
     
     plt.subplot(236)
-    plt.plot(theta % 2*np.pi)
+    plt.plot(theta % (2*np.pi) )
     plt.title('Circular Coordinates')
     plt.show()
 
@@ -114,6 +131,34 @@ def plotCircularCoordinates2(s, theta, onsets, gtOnsets):
     if len(gtOnsets) > 0:
         plt.stem(gtOnsets, 0.5*np.ones(len(gtOnsets)), 'r')
     plt.title('Onsets')
+    plt.show()
+
+def plotCircularCoordinates3(s, D, v, theta, A):
+    plt.subplot(231)
+    plt.plot(s.novFn)
+    plt.title("Original Function")
+    
+    plt.subplot(232)
+    plt.imshow(D)
+    plt.title('SSM')
+    
+    plt.subplot(233)
+    plt.imshow(A)
+    plt.title('Adjacency Matrix')
+    
+    plt.subplot(234)
+    plt.plot(v[:, EIG1], 'b')
+    plt.hold(True)
+    plt.plot(v[:, EIG2], 'r')
+    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
+    
+    plt.subplot(235)
+    plt.scatter(v[:, EIG1], v[:, EIG2], c=np.arange(v.shape[0]), edgecolors = 'none')
+    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
+    
+    plt.subplot(236)
+    plt.plot(theta % (2*np.pi))
+    plt.title('Circular Coordinates')
     plt.show()
 
 #Give different angles a score based on the energy of the novelty function
@@ -146,7 +191,8 @@ def getOnsetsPassingAngle(t, angle):
     return idx
 
 def getCircularCoordinatesBlock(args):
-    (X, Normalize, Kappa) = args
+    AddTimeEdges = True
+    (X, Normalize, Kappa, s) = args
     NEig = 4
     #Compute SSM
     XSum = np.sum(X**2, 0)
@@ -154,13 +200,16 @@ def getCircularCoordinatesBlock(args):
         X = X/np.sqrt(XSum)
         XSum = np.ones(XSum.shape)
     D = XSum[:, None] + XSum[None, :] - 2*(X.T.dot(X))
+    D[D < 0] = 0
+    D = np.sqrt(D)
     
     #Compute spectral decomposition
-    A = SSMToBinaryMutual(D, Kappa)
+    A = SSMToBinarySigma(D, Kappa)
     #A = np.exp(-D*10)
-    A[range(1, D.shape[0]), range(D.shape[0]-1)] = 1
-    A[range(D.shape[0]-1), range(1, D.shape[0])] = 1
-    #plotAdjacencyEdgesPCA(D, A, s)
+    if AddTimeEdges:
+        A[range(1, D.shape[0]), range(D.shape[0]-1)] = 1
+        A[range(D.shape[0]-1), range(1, D.shape[0])] = 1
+    #plotAdjacencyEdgesGraph(A)
     
     deg = np.sum(A, 1)
     DEG = np.eye(D.shape[0])
@@ -183,7 +232,8 @@ def getCircularCoordinatesBlock(args):
     if theta[-1] - theta[0] < 0:
         theta = -theta
     theta = theta - theta[0]
-    return (D, L, v, theta)
+    #plotCircularCoordinates3(s, D, v, theta, A)
+    return (D, A, L, v, theta)
 
 #Throw away blocks that have a very low slope after linear regression
 def discardBadBlocks(s, idxs, BlockAngles):
@@ -296,11 +346,11 @@ def getCircularCoordinatesBlocks(s, W, pca, BlockLen, BlockHop, parpool, gaussWi
     for i in range(NBlocks):
         Blocks.append(np.array(X[:, idxs[i]]))
     Normalize = True
-    args = zip(Blocks, [Normalize]*len(Blocks), [Kappa]*len(Blocks))
+    args = zip(Blocks, [Normalize]*len(Blocks), [Kappa]*len(Blocks), [s]*len(Blocks))
     #res = parpool.map(getCircularCoordinatesBlock, args)
     for i in range(NBlocks):
-        (D, L, v, theta) = getCircularCoordinatesBlock((Blocks[i], Normalize, Kappa))
-        #(D, L, v, theta) = res[i]
+        (D, A, L, v, theta) = getCircularCoordinatesBlock((Blocks[i], Normalize, Kappa, s))
+        #(D, A, L, v, theta) = res[i]
         BlockAngles.append(theta)
         Ds.append(D)
         Ls.append(L)
