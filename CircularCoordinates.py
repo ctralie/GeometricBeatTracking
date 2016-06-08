@@ -47,159 +47,9 @@ def getAdjacencySigma(D, Sigma):
     np.fill_diagonal(ret, 0)
     return ret
 
-def plotAdjacencyEdgesPCA(D, A, s):
-    #Plot the adjacency matrix on top of the point cloud after PCA
-    [I, J] = np.meshgrid(np.arange(A.shape[0]), np.arange(A.shape[0]))
-    I = I[A > 0]
-    J = J[A > 0]
-    Y = (s.S[0:2])[:, None]*s.V[0:2, :]  
-    plt.subplot(223)
-    plt.spy(scipy.sparse.coo_matrix(A))
-    plt.title('Adjacency Matrix')
-    plt.subplot(224)
-    plt.plot(Y[0, :], Y[1, :], '.')
-    plt.title('2D PCA + Adjacency Edges')
-    plt.hold(True)
-    for i in range(len(I)):
-        x1 = Y[:, I[i]]
-        x2 = Y[:, J[i]]
-        plt.plot([x1[0], x2[0]], [x1[1], x2[1]], 'b')
-    plt.subplot(221)
-    plt.imshow(D)
-    plt.title('SSM')
-    plt.subplot(222)
-    plt.plot(s.novFn)
-    plt.title('Original Function')
-    plt.show()
-
-def plotAdjacencyEdgesGraph(A):
-    import networkx as nx
-    N = A.shape[0]
-    [I, J] = np.meshgrid(np.arange(N), np.arange(N))
-    I = I[A > 0]
-    J = J[A > 0]
-    elist = [(I[i], J[i]) for i in range(len(I))]
-    G = nx.Graph()
-    G.add_nodes_from(np.arange(N))
-    G.add_edges_from(elist)
-    nx.draw_spectral(G, node_color = np.arange(N))
-    plt.show()
-
-def plotEigenvectors(v, NEig):
-    k = int(np.ceil(np.sqrt(NEig)))
-    for i in range(NEig):
-        plt.subplot(k, k, i+1)
-        plt.plot(v[:, i])
-    plt.show()
-
-def plotCircularCoordinates(s, D, v, theta, onsets, gtOnsets):
-    plt.subplot(231)
-    plt.plot(s.novFn)
-    plt.title("Original Function")
-    
-    plt.subplot(232)
-    plt.imshow(D)
-    plt.title('SSM')
-    
-    plt.subplot(233)
-    plt.stem(onsets, np.ones(len(onsets)), 'b')
-    plt.hold(True)
-    if len(gtOnsets) > 0:
-        plt.stem(gtOnsets, 0.5*np.ones(len(gtOnsets)), 'r')
-    plt.title('Onsets')
-    
-    plt.subplot(234)
-    plt.plot(v[:, EIG1], 'b')
-    plt.hold(True)
-    plt.plot(v[:, EIG2], 'r')
-    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
-    
-    plt.subplot(235)
-    plt.plot(v[:, EIG1], v[:, EIG2])
-    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
-    
-    plt.subplot(236)
-    plt.plot(theta % (2*np.pi) )
-    plt.title('Circular Coordinates')
-    plt.show()
-
-def plotCircularCoordinates2(s, theta, onsets, gtOnsets):
-    plt.subplot(311)
-    plt.plot(s.novFn)
-    plt.title("Original Function")
-    
-    plt.subplot(312)
-    plt.plot(theta % 2*np.pi)
-    plt.title('Circular Coordinates')
-
-    plt.subplot(313)
-    plt.stem(onsets, np.ones(len(onsets)), 'b')
-    plt.hold(True)
-    if len(gtOnsets) > 0:
-        plt.stem(gtOnsets, 0.5*np.ones(len(gtOnsets)), 'r')
-    plt.title('Onsets')
-    plt.show()
-
-def plotCircularCoordinates3(s, D, v, theta, A):
-    plt.subplot(231)
-    plt.plot(s.novFn)
-    plt.title("Original Function")
-    
-    plt.subplot(232)
-    plt.imshow(D)
-    plt.title('SSM')
-    
-    plt.subplot(233)
-    plt.imshow(A)
-    plt.title('Adjacency Matrix')
-    
-    plt.subplot(234)
-    plt.plot(v[:, EIG1], 'b')
-    plt.hold(True)
-    plt.plot(v[:, EIG2], 'r')
-    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
-    
-    plt.subplot(235)
-    plt.scatter(v[:, EIG1], v[:, EIG2], c=np.arange(v.shape[0]), edgecolors = 'none')
-    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
-    
-    plt.subplot(236)
-    plt.plot(theta % (2*np.pi))
-    plt.title('Circular Coordinates')
-    plt.show()
-
-#Give different angles a score based on the energy of the novelty function
-#that occurs around those angles
-def scoreAngles(s, theta, NAngles):
-    angles = np.linspace(0, 2*np.pi, NAngles+1)
-    angles = angles[0:NAngles]
-    scores = np.zeros(NAngles)
-    sigma = np.pi/20
-    
-    dtheta = theta[None, :] - angles[:, None]
-    dtheta = np.mod(dtheta, 2*np.pi)
-    dtheta[dtheta > np.pi] = 2*np.pi - dtheta[dtheta > np.pi] #Ensure proper wraparound
-    weights = np.exp(-dtheta**2/(2*sigma**2))
-    novFn = s.novFn[0:len(theta)]
-    scores = np.abs(weights*novFn[None, :])
-    scoresFinal = np.sum(scores, 1)
-    return (angles, scores, scoresFinal)
-
-#Determine when the unwrapped angles "t" pass some 2pi offset of "angle"
-#Assumes the angle has been unwrapped and is overall increasing
-def getOnsetsPassingAngle(t, angle):
-    #Find whether each theta is above or below the closest 2pi multiple of angle
-    diff = (angle - t) % (2*np.pi)
-    diff[diff > np.pi] = -1 #These angles are above the closest theta
-    diff[diff >= 0] = 1
-    idx = np.arange(len(diff)-1)
-    idx = idx[diff[1::] - diff[0:-1] == 2]
-    #TODO: Denoise noisy transitions
-    return idx
-
-def getCircularCoordinatesBlock(args):
+def getLaplacianBlock(args):
     AddTimeEdges = False
-    (X, Normalize, Kappa, s) = args
+    (X, Normalize, Sigma, s) = args
     NEig = 3
     #Compute SSM
     XSum = np.sum(X**2, 0)
@@ -211,7 +61,11 @@ def getCircularCoordinatesBlock(args):
     D = np.sqrt(D)
     
     #Compute spectral decomposition
-    A = getAdjacencySigma(D, Kappa)
+    #If Sigma is negative, treat it as "Kappa" (proportion of mutual nearest neighbors)
+    if Sigma > 0:
+        A = getAdjacencySigma(D, Sigma)
+    else:
+        A = getAdjacencyKappa(D, -Sigma)
     #A = np.exp(-D*10)
     if AddTimeEdges:
         A[range(1, D.shape[0]), range(D.shape[0]-1)] = 1
@@ -234,176 +88,91 @@ def getCircularCoordinatesBlock(args):
         #v = err.eigenvectors
         w = np.zeros(2)
         v = np.zeros((L.shape[0], max(EIG2, EIG1)+1))
-    theta = np.unwrap(np.arctan2(v[:, EIG2], v[:, EIG1]))
+    return {'D':D, 'A':A, 'L':L, 'v':v}
+
+def RMSScoreBlock(pv):
+    v = np.array(pv[:, [EIG1, EIG2]])
+    N = v.shape[0]
+    #Center on centroid
+    v = v - np.mean(v, 0, keepdims=True)
+    #RMS Normalize
+    v = v*np.sqrt(N/np.sum(v**2))
+    #Compute mean distance from circle
+    ds = np.sqrt(np.sum(v**2, 1))
+    score = np.sum(np.abs(ds - 1))/float(N)
+    #TODO: Fit parabola?
+    return score
+
+#Use arctangent of mean-centered eigenvectors as estimates of
+#circular coordinates
+def getThetas(pv):
+    v = np.array(pv[:, [EIG1, EIG2]])
+    v = v - np.mean(v, 0, keepdims=True)
+    theta = np.unwrap(np.arctan2(v[:, 1], v[:, 0]))
     #Without loss of generality, switch theta to overall increasing
     if theta[-1] - theta[0] < 0:
         theta = -theta
-    theta = theta - theta[0]
-    #plotCircularCoordinates3(s, D, v, theta, A)
-    return (D, A, L, v, theta)
+    return theta - theta[0]
 
-#Throw away blocks that have a very low slope after linear regression
-def discardBadBlocks(s, idxs, BlockAngles):
-    A = np.ones((len(idxs[0]), 2))
-    validIdx = []
-    for i in range(len(idxs)):
-        A[:, 0] = idxs[i]
-        m, c = np.linalg.lstsq(A, np.array(BlockAngles[i]))[0]
-        tempo = m*(s.Fs/float(s.hopSize))/(2*np.pi) #Convert to cycles per second
-        if tempo > VALIDTEMPOMIN:
-            validIdx.append(i)
-    idxs = [idxs[i] for i in validIdx]
-    BlockAngles = [BlockAngles[i] for i in validIdx]
-    return (idxs, BlockAngles)
+#Estimate smoothed versions of slopes in radians per sample
+#2*sWin is the size of the rectangular window used to smooth
+def getSlopes(thetas, sWin = 4):
+    N = len(thetas)
+    slopes = np.zeros(N)
+    deriv = np.zeros(sWin*2)
+    deriv[0:sWin] = np.ones(sWin)
+    deriv[sWin:] = -np.ones(sWin)
+    slopes[sWin-1:-sWin] = np.convolve(thetas, deriv, 'valid')/float(sWin**2)
+    slopes[0:sWin-1] = slopes[sWin-1]
+    slopes[-sWin:] = slopes[-sWin]
+    return slopes
 
-#Align adjacent blocks by aligning the median of the y coordinates in their 
-#overlapping region
-def medianAlignBlocks(idxs, BlockAngles):
-    N = len(idxs[0])
-    for i in range(1, len(idxs)):
-        k = 0
-        #Find the point where these sequences overlap
-        while k < N:
-            #TODO: Could do this faster with binary search
-            if idxs[i-1][k] == idxs[i][0]:
-                break
-            k += 1
-        if k == N:
-            print "ERROR: Blocks at incides %i and %i don't overlap"%(i-1, i)
-        else:
-            med1 = np.median(BlockAngles[i-1][k::])
-            med2 = np.median(BlockAngles[i][0:N-k])
-            BlockAngles[i] += (med1-med2)
-
-#Merge overlapping blocks by taking the median of the circular coordinates
-#in overlapping regions after alignment
-def medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop):
-    theta = np.nan*np.ones((BlockLen/BlockHop, N))
-    currIdx = np.zeros(N, dtype=np.int64)
-    for i in range(len(idxs)):
-        theta[currIdx[idxs[i]], idxs[i]] = BlockAngles[i]
-        currIdx[idxs[i]] += 1
-    return scipy.stats.nanmedian(theta, 0)
-
-def extendThetas(theta, N):
-    N1 = len(theta)
-    theta2 = np.zeros(N)
-    theta2[0:N1] = theta
-    slope = (theta[-1]-theta[0])/float(N1)
-    theta2[N1:N] = theta[-1] + slope*np.arange(N-N1)
-    return theta2
-
-#Do circular coordinates in a sliding window and aggregate the results
-#in a consistent way
-def getCircularCoordinatesBlocks(s, W, pca, BlockLen, BlockHop, parpool, gaussWin = 1, Normalize = True, denoise = True, doPlot = True, Kappa = 0.1):
-    #Step 0: Perform Sliding Window Denoising
-    novFnOrig = np.array(s.novFn)
-    if denoise:
-        orig = s.origNovFn
-        if gaussWin > 1:            
-            s.smoothNovFn(gaussWin)
-            if doPlot:
-                plt.clf()
-                plt.plot(s.origNovFn, 'b')
-                plt.hold(True)
-                plt.plot(s.novFn, 'g')
-                plt.title('Smoothed by %i'%gaussWin)
-                plt.show()
-    
-    #Step 1: Perform PCA on a sliding window over the entire song
+#Do circular coordinates in a sliding window with different nearest neighbor thresholds
+#for the graph laplacian
+#Returns: AllResults[].  Each element is an array corresponding to one of the Kappa values
+#Each array is an array of dictionary objects with fields D, A, L, v, score, thetas, and slopes
+def getCircularCoordinatesBlocks(s, W, BlockLen, BlockHop, Normalize = True, Kappas = [0.02, 0.05, 0.1, 0.15, 0.2, 0.25]):
+    #Step 1: Get the sliding window embedding of the audio novelty function
     X = s.getSlidingWindowFull(W)
-#    n = np.array(s.origNovFn)
-#    for m in ['hfc', 'complex', 'complex_phase', 'flux', 'rms']:
-#        s.getEssentiaNoveltyFn(s.hopSize, m)
-#        Y = s.getSlidingWindowFull(W)[:, 0:X.shape[1]]
-#        X = np.concatenate((X, Y), 0)
-#        n += s.origNovFn[0:n.size]
-#    s.origNovFn = n
-#    plt.clf()
-#    plt.plot(s.origNovFn)
-#    plt.show()
-    if pca:
-        if doPlot:
-            (U, S) = s.getSlidingWindowLeftSVD(W)
-            plt.clf()
-            plt.plot(np.cumsum(S)/np.sum(S))
-            plt.hold(True)
-            plt.plot(np.arange(len(S)), 0.4*np.ones(len(S)), 'g')
-            plt.plot(np.arange(len(S)), 0.8*np.ones(len(S)), 'g')
-            plt.title('Singular Values')
-            plt.show()
-        X = pca.fit_transform(X.T).T
-    
-    Ds = []
-    Ls = []
-    vs = []
+
+    #Step 2: Set up the blocks
     idxs = []
     N = X.shape[1]
     NBlocks = int(np.ceil(1 + (N - BlockLen)/BlockHop))
     print "NBlocks = ", NBlocks
-    BlockAngles = [] #Holds the circular coordinates for each different block
-    #Step 2: Get the circular coordinates in blocks
-    tic = time.time()
     for i in range(NBlocks):
         thisidxs = np.arange(i*BlockHop, i*BlockHop+BlockLen, dtype=np.int64)
         thisidxs = thisidxs[thisidxs < N]
         idxs.append(thisidxs)
-    #Pull out all blocks and prepare for parallel processing
+    #Pull out all blocks
     Blocks = []
     for i in range(NBlocks):
         Blocks.append(np.array(X[:, idxs[i]]))
-    Normalize = True
-    args = zip(Blocks, [Normalize]*len(Blocks), [Kappa]*len(Blocks), [s]*len(Blocks))
-    #res = parpool.map(getCircularCoordinatesBlock, args)
-    for i in range(NBlocks):
-        (D, A, L, v, theta) = getCircularCoordinatesBlock((Blocks[i], Normalize, Kappa, s))
-        #(D, A, L, v, theta) = res[i]
-        BlockAngles.append(theta)
-        Ds.append(D)
-        Ls.append(L)
-        vs.append(v)
-    toc = time.time()
-    print "Elapsed time circular coordinates computation: ", toc-tic
     
-    if doPlot:
-        plt.hold(True)
-        for i in range(len(idxs)):
-            plt.plot(idxs[i]*s.hopSize/float(s.Fs), BlockAngles[i])
-        plt.title("All Blocks")
-        plt.xlabel("Time (Seconds)")
-        plt.ylabel("Theta (Radians)")
-        plt.show()
-    #Step 3: Discard bad blocks and plot the blocks before alignment
-    (idxs, BlockAngles) = discardBadBlocks(s, idxs, BlockAngles)
-    if doPlot:
-        plt.hold(True)
-        for i in range(len(idxs)):
-            plt.plot(idxs[i]*s.hopSize/float(s.Fs), BlockAngles[i])
-        plt.title("Good Blocks Before Alignment")
-        plt.xlabel("Time (Seconds)")
-        plt.ylabel("Theta (Radians)")
-        plt.show()
-    #Step 4: Median align the blocks and plot the result
-    medianAlignBlocks(idxs, BlockAngles)
-    if doPlot:
-        plt.hold(True)
-        for i in range(len(idxs)):
-            plt.plot(idxs[i]*s.hopSize/float(s.Fs), BlockAngles[i])
-        plt.title("Blocks After Alignment")
-        plt.xlabel("Time (Seconds)")
-        plt.ylabel("Theta (Radians)")
-        plt.show()
-
-    #Step 4: Finish merging all of the blocks by taking the median of values at the same time coordinate
-    theta = medianMergeBlocks(idxs, BlockAngles, N, BlockLen, BlockHop)
-    theta = extendThetas(theta, len(s.novFn))
-    #Fill in nan values with zero order hold (not the best but gets the job done)
-    if np.isnan(theta[0]):
-        theta[0] = 0
-    for i in range(1, len(theta)):
-        if np.isnan(theta[i]):
-            theta[i] = theta[i-1]
-    if doPlot:
-        plt.plot(theta)
-        plt.show()
-    return theta
+    #Step 3: Compute the Laplacian in all blocks for each Kappa
+    AllResults = []
+    for Kappa in Kappas:
+        print "Doing Kappa = ", Kappa, "..."
+        tic = time.time()
+        Results = []
+        ##Prepare for parallel processing
+        #args = zip(Blocks, [Normalize]*len(Blocks), [Kappa]*len(Blocks), [s]*len(Blocks))
+        #Results = parpool.map(getCircularCoordinatesBlock, args)
+        for i in range(NBlocks):
+            res = getLaplacianBlock((Blocks[i], Normalize, -Kappa, s))
+            Results.append(res)
+        toc = time.time()
+        print "Elapsed time circular coordinates computation: ", toc-tic
+        AllResults.append(Results)
+    
+    #Step 4: Compute and score circular coordinates in all blocks for each
+    #Kappa, and compute slopes
+    for Results in AllResults:
+        for res in Results:
+            #Step 3: Score each block as circular or not
+            res['score'] = RMSScoreBlock(res['v'])
+            #Step 4: Convert to circular coordinates
+            res['thetas'] = getThetas(res['v'])
+            #Step 5: Use circular coordinates to estimate slope
+            res['slopes'] = getSlopes(res['thetas'])
+    return AllResults
