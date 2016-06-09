@@ -116,7 +116,7 @@ def getThetas(pv):
 
 #Estimate smoothed versions of slopes in radians per sample
 #2*sWin is the size of the rectangular window used to smooth
-def getSlopes(thetas, sWin = 4):
+def getSlopes(thetas, sWin = 10):
     N = len(thetas)
     slopes = np.zeros(N)
     deriv = np.zeros(sWin*2)
@@ -124,7 +124,7 @@ def getSlopes(thetas, sWin = 4):
     deriv[sWin:] = -np.ones(sWin)
     slopes[sWin-1:-sWin] = np.convolve(thetas, deriv, 'valid')/float(sWin**2)
     slopes[0:sWin-1] = slopes[sWin-1]
-    slopes[-sWin:] = slopes[-sWin]
+    slopes[-(sWin+1):] = slopes[-(sWin+1)]
     return slopes
 
 #Do circular coordinates in a sliding window with different nearest neighbor thresholds
@@ -176,3 +176,32 @@ def getCircularCoordinatesBlocks(s, W, BlockLen, BlockHop, Normalize = True, Kap
             #Step 5: Use circular coordinates to estimate slope
             res['slopes'] = getSlopes(res['thetas'])
     return AllResults
+
+#Aggregate all of the slopes into one place with their confidences
+def getInstantaneousTempoArray(s, AllResults, BlockLen, BlockHop):
+    N = len(s.novFn)
+    Tempos = []
+    Scores = []
+    for i in range(N):
+        Tempos.append([])
+        Scores.append([])
+    timeScale = (float(s.Fs)/s.hopSize)*60.0/(2*np.pi)
+    for Results in AllResults:
+        for i in range(len(Results)):
+            score = Results[i]['score']
+            slopes = Results[i]['slopes']
+            thetas = Results[i]['thetas']
+            slope = (thetas[-1] - thetas[0])/float(len(thetas))
+            for j in range(len(slopes)):
+                idx = i*BlockHop + j
+                #Tempos[idx].append(timeScale*slopes[j])
+                Tempos[idx].append(timeScale*slope)
+                Scores[idx].append(np.exp(-score/0.1))
+    #Now copy into arrays for convenience
+    TemposArr = np.zeros((N, (BlockLen/BlockHop)*len(AllResults)))
+    ScoresArr = np.zeros(TemposArr.shape)
+    for i in range(len(Tempos)):
+        for j in range(len(Tempos[i])):
+            TemposArr[i, j] = Tempos[i][j]
+            ScoresArr[i, j] = Scores[i][j]
+    return (TemposArr, ScoresArr)
