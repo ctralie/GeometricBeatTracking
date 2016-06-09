@@ -66,12 +66,8 @@ if __name__ == '__main__':
     BlockHop = W/6
     Kappas = [0.02, 0.05, 0.1, 0.15, 0.2, 0.25]
     AllResults = getCircularCoordinatesBlocks(s, W, BlockLen, BlockHop, True, Kappas)
-    #plotRes(AllResults[0][0])
-    #plt.show()
     
     colors = ['r', 'g', 'b', 'c', 'm', 'y']
-    (TemposArr1, ScoresArr1) = getInstantaneousTempoArray(s, [AllResults[0]], BlockLen, BlockHop)
-    (TemposArr2, ScoresArr2) = getInstantaneousTempoArray(s, [AllResults[1]], BlockLen, BlockHop)
     plt.hold(True)
     ax = plt.subplot(111)
     for i in range(len(AllResults)):
