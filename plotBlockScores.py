@@ -47,14 +47,17 @@ def plotRes(res):
         
 
 if __name__ == '__main__':
+    PLOTBLOCKS = False
     hopSize = 128
     winSize = 2*2048
     gaussWin = 20
     
-    filename = "examples1/train1.wav"
+    filename = "examples1/train2.wav"
     
     #Difficult waltz examples
     #filename = "Datasets/BallroomData/Waltz/Media-105102.wav"
+    #filename = 'MissionImpossible.wav'
+    #filename = 'trillingandsome.wav'
     
     s = BeatingSound()
     s.loadAudio(filename)
@@ -67,16 +70,38 @@ if __name__ == '__main__':
     Kappas = [0.02, 0.05, 0.1, 0.15, 0.2, 0.25]
     AllResults = getCircularCoordinatesBlocks(s, W, BlockLen, BlockHop, True, Kappas)
     
+    if PLOTBLOCKS:
+        for i in range(len(AllResults)):
+            Results = AllResults[i]
+            for j in range(len(Results)):
+                plt.clf()
+                plotResults(Results[j])
+                plt.savefig("%i_%i_%g.png"%(i, j, Kappas[i]))
+        plt.clf()
+    
+    tempos = aggregateTempoScores(s, AllResults)
+    sio.savemat("tempos.mat", {"tempos":tempos})
+    plt.plot(tempos)
+    plt.title('Tempos')
+    plt.show()
+    
     colors = ['r', 'g', 'b', 'c', 'm', 'y']
     plt.hold(True)
     ax = plt.subplot(111)
+    cutoff = 0
     for i in range(len(AllResults)):
         (TemposArr, ScoresArr) = getInstantaneousTempoArray(s, [AllResults[i]], BlockLen, BlockHop)
-        [X, Y] = np.meshgrid(np.arange(TemposArr.shape[0]), np.arange(TemposArr.shape[1]))
-        plt.scatter(X.flatten()*float(s.hopSize)/s.Fs, TemposArr.flatten(), 30*ScoresArr.flatten(), colors[i], label = '%g'%Kappas[i], edgecolor='none')
+        [Y, X] = np.meshgrid(np.arange(TemposArr.shape[1]), np.arange(TemposArr.shape[0]))
+        X = X.flatten()
+        TemposArr = TemposArr.flatten()
+        ScoresArr = ScoresArr.flatten()
+        X = X[ScoresArr > cutoff]
+        TemposArr = TemposArr[ScoresArr > cutoff]
+        ScoresArr = ScoresArr[ScoresArr > cutoff]
+        plt.scatter(X*float(s.hopSize)/s.Fs, TemposArr, 30*ScoresArr, colors[i], label = '%g'%Kappas[i], edgecolor='none')
     plt.legend()
     ax.set_ylim([0, 600])
-    ax.set_xlim([0, 30])
+    #ax.set_xlim([0, 30])
     plt.xlabel("Time (Seconds)")
     plt.ylabel("Tempo")
     plt.show()

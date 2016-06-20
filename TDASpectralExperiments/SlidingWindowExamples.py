@@ -56,35 +56,40 @@ def plotResults(X, D, A, v, theta, Kappa):
 if __name__ == '__main__':
     np.random.seed(100)
     T = 150
-    W = 160
+    W = 125
     noiseSigma = 0
     gaussSigma = 2
-    NSamples = 500
+    NSamples = 250
+
+    y = np.cos(4*np.pi*np.arange(NSamples)/NSamples)
+    y += np.cos(8*np.pi*np.arange(NSamples)/NSamples)
     
-    x = getPulseTrain(NSamples, T, T, 1, 1)
-    x += getPulseTrain(NSamples, T/3, T/3, 1, 1)
-    y = convolveAndAddNoise(x, gaussSigma, noiseSigma)
+#    x = getPulseTrain(NSamples, T, T, 1, 1)
+#    x += getPulseTrain(NSamples, T/3, T/3, 1, 1)
+#    y = convolveAndAddNoise(x, gaussSigma, noiseSigma)
     
     s = BeatingSound()
     s.novFn = y
     plt.plot(y)
     plt.show()
     X = s.getSlidingWindowFull(W)
-    sio.savemat("X.mat", {"X":X.T})
-    I = sio.loadmat("I.mat")['I']
-    ds = np.sort(I.flatten())
-    #Put a distance threshold right before and right after each event
-    newds = []
-    eps = 0.01
-    for i in range(len(ds)):
-        newds.append(ds[i]-eps)
-        newds.append(ds[i])
-        newds.append(ds[i]+eps)
-    ds = np.array(newds)
+#    sio.savemat("X.mat", {"X":X.T})
+#    I = sio.loadmat("I.mat")['I']
+#    ds = np.sort(I.flatten())
+#    #Put a distance threshold right before and right after each event
+#    newds = []
+#    eps = 0.01
+#    for i in range(len(ds)):
+#        newds.append(ds[i]-eps)
+#        newds.append(ds[i])
+#        newds.append(ds[i]+eps)
+#    ds = np.array(newds)
     i = 0
-    for Kappa in ds:
+    for Kappa in [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5]:
         print "Kappa = ", Kappa
-        (D, A, L, v, theta) = getCircularCoordinatesBlock((X, False, Kappa, None))
+        res = getLaplacianBlock((X, True, -Kappa, None))
+        [D, A, L, v] = [res['D'], res['A'], res['L'], res['v']]
+        theta = getThetas(v)
         sio.savemat("L%i.mat"%i, {"L":L})
         plt.clf()
         plotResults(X, D, A, v, theta, Kappa)

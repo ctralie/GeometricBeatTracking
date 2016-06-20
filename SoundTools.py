@@ -282,8 +282,36 @@ class BeatingSound(object):
             res[i:i+M] += Window/np.sqrt(np.sum(Window**2))
             counts[i:i+M] += 1.0
         return res/counts
-        
+
+#Save a file which auralizes a number of tempos
+#tempos: an array of tempos in beats per minute
+#Fs: Sample rate, NSeconds: Number of seconds to go
+#filename: Output filename (must be a .wav file)
+def makeMetronomeSound(tempos, Fs, NSeconds, filename):
+    blipsamples = int(np.round(0.02*Fs))
+    blip = np.cos(2*np.pi*np.arange(blipsamples)*440.0/Fs)
+    #blip = np.array(blip*np.max(np.abs(YAudio)), dtype=YAudio.dtype)
+    X = np.zeros(int(round(NSeconds*Fs)))
+    for tempo in tempos:
+        #tempos are in beats per minute, convert to samples per beat
+        T = 1.0/(tempo/(60.0*Fs))
+        print "T = ", T
+        i = 0
+        while True:
+            i1 = int(i*T)
+            i2 = i1 + blipsamples
+            if i2 >= len(X):
+                break
+            X[i1:i2] += blip
+            i += 1
+    X = X/np.max(X)
+    sio.wavfile.write(filename, Fs, X)  
+
 if __name__ == '__main__':
+    #36, 135, 171, 340
+    makeMetronomeSound([171], 44100, 8, 'metronome.wav')
+
+if __name__ == '__main__2':
     s = BeatingSound()
     s.loadAudio("examples1/train1.wav")
     s.getMFCCNoveltyFn(2048, 128, 8000)

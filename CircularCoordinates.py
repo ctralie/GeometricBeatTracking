@@ -8,6 +8,7 @@ import prox_tv as ptv
 import time
 from SyntheticFunctions import *
 from SoundTools import *
+from TDATools import *
 from DynProgOnsets import *
 from multiprocessing import Pool
 from sklearn.decomposition import PCA
@@ -15,6 +16,34 @@ from sklearn.decomposition import PCA
 EIG1 = 1
 EIG2 = 2
 VALIDTEMPOMIN = 0.2
+
+def plotResults(results):
+    [D, A, v, thetas] = [results['D'], results['A'], results['v'], results['thetas']]
+    
+    plt.subplot(231)
+    plt.imshow(D)
+    plt.title('SSM')
+    
+    plt.subplot(232)
+    plt.spy(A)
+    plt.title("Adjacency Matrix")
+    
+    plt.subplot(233)
+    plt.title("Score = %g"%results['score'])
+    
+    plt.subplot(234)
+    plt.plot(v[:, EIG1], 'b')
+    plt.hold(True)
+    plt.plot(v[:, EIG2], 'r')
+    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
+    
+    plt.subplot(235)
+    plt.scatter(v[:, EIG1], v[:, EIG2], c=np.arange(v.shape[0]), edgecolors = 'none')
+    plt.title('Eigenvectors %i and %i'%(EIG1, EIG2))
+    
+    plt.subplot(236)
+    plt.plot(thetas % (2*np.pi))
+    plt.title('Circular Coordinates')
 
 def SSMToBinary(D, Kappa):
     N = D.shape[0]
@@ -96,7 +125,10 @@ def RMSScoreBlock(pv):
     #Center on centroid
     v = v - np.mean(v, 0, keepdims=True)
     #RMS Normalize
-    v = v*np.sqrt(N/np.sum(v**2))
+    vSum = np.sum(v**2)
+    if vSum == 0:
+        return 100
+    v = v*np.sqrt(N/vSum)
     #Compute mean distance from circle
     ds = np.sqrt(np.sum(v**2, 1))
     score = np.sum(np.abs(ds - 1))/float(N)
@@ -178,7 +210,7 @@ def getCircularCoordinatesBlocks(s, W, BlockLen, BlockHop, Normalize = True, Kap
     return AllResults
 
 #Aggregate all of the slopes into one place with their confidences
-def getInstantaneousTempoArray(s, AllResults, BlockLen, BlockHop):
+def getInstantaneousTempoArray(s, AllResults, BlockLen, BlockHop, doAverages = True):
     N = len(s.novFn)
     Tempos = []
     Scores = []
@@ -186,17 +218,23 @@ def getInstantaneousTempoArray(s, AllResults, BlockLen, BlockHop):
         Tempos.append([])
         Scores.append([])
     timeScale = (float(s.Fs)/s.hopSize)*60.0/(2*np.pi)
-    for Results in AllResults:
-        for i in range(len(Results)):
-            score = Results[i]['score']
-            slopes = Results[i]['slopes']
-            thetas = Results[i]['thetas']
+    for i in range(len(AllResults)):
+        Results = AllResults[i]
+        for j in range(len(Results)):
+            score = Results[j]['score']
+            slopes = Results[j]['slopes']
+            thetas = Results[j]['thetas']
             slope = (thetas[-1] - thetas[0])/float(len(thetas))
-            for j in range(len(slopes)):
-                idx = i*BlockHop + j
-                #Tempos[idx].append(timeScale*slopes[j])
-                Tempos[idx].append(timeScale*slope)
+            for k in range(len(slopes)):
+                idx = j*BlockHop + k
+                if doAverages:
+                    #Use average tempo over block
+                    Tempos[idx].append(timeScale*slope)
+                else:
+                    #Use instantaneous tempo for each block
+                    Tempos[idx].append(timeScale*slopes[k])
                 Scores[idx].append(np.exp(-score/0.1))
+                #Scores[idx].append(float(j)/len(Results))
     #Now copy into arrays for convenience
     TemposArr = np.zeros((N, (BlockLen/BlockHop)*len(AllResults)))
     ScoresArr = np.zeros(TemposArr.shape)
@@ -205,3 +243,17 @@ def getInstantaneousTempoArray(s, AllResults, BlockLen, BlockHop):
             TemposArr[i, j] = Tempos[i][j]
             ScoresArr[i, j] = Scores[i][j]
     return (TemposArr, ScoresArr)
+
+def aggregateTempoScores(s, AllResults, sigma = 1):
+    MaxTempo = 600
+    timeScale = (float(s.Fs)/s.hopSize)*60.0/(2*np.pi)
+    tempos = np.zeros(MaxTempo)
+    for i in range(len(AllResults)):
+        Results = AllResults[i]
+        for j in range(len(Results)):
+            score = np.exp(-Results[j]['score']/0.1)
+            thetas = Results[j]['thetas']
+            slope = (thetas[-1] - thetas[0])/float(len(thetas))
+            tempo = timeScale*slope
+            tempos += score*np.exp(-(np.arange(MaxTempo)-tempo)**2/(2*sigma**2))
+    return tempos
