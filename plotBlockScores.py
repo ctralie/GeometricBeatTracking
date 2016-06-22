@@ -52,16 +52,26 @@ if __name__ == '__main__':
     winSize = 2*2048
     gaussWin = 20
     
-    filename = "examples1/train2.wav"
+    #filename = "examples1/train2.wav"
     
     #Difficult waltz examples
     #filename = "Datasets/BallroomData/Waltz/Media-105102.wav"
     #filename = 'MissionImpossible.wav'
     #filename = 'trillingandsome.wav'
     
+    #GTzan examples
+    filename = "Datasets/GTzan/blues/blues.00013.au"
+    
     s = BeatingSound()
     s.loadAudio(filename)
     s.getLibrosaNoveltyFn(winSize, hopSize)
+    
+    X = s.novFn
+    plt.plot(np.arange(len(X))*float(s.hopSize)/s.Fs, X)
+    plt.xlabel('Seconds')
+    plt.title("Novelty Function")
+    plt.show()
+    
     W = 690
     print "W = ", W
     

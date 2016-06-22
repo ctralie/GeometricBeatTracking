@@ -2,6 +2,7 @@ import numpy as np
 import numpy.linalg as linalg
 import scipy.io as sio
 from scipy import sparse
+import scipy.interpolate as interp
 import matplotlib.pyplot as plt
 import subprocess
 import os
@@ -283,6 +284,45 @@ class BeatingSound(object):
             counts[i:i+M] += 1.0
         return res/counts
 
+    ######################################################
+    ##         Other Signal Processing Stuff            ##
+    ######################################################
+    
+    #For comparison with the Quinton paper
+    #TODO: Finish this
+    def getDFTACFHadamardBlocks(self, BlockLen, BlockHop):
+        X = self.novFn
+        N = len(X)
+        #Exclude last block if it doesn't include a full BlockLen
+        #samples so that all frames are the same length
+        NBlocks = int(np.floor(1 + (N - BlockLen)/BlockHop))
+        res = np.zeros((NBlocks, BlockLen))
+        for i in range(NBlocks):
+            thisidxs = np.arange(i*BlockHop, i*BlockHop+BlockLen, dtype=np.int64)
+            x = X[thisidxs]
+            n = len(x)
+            #DFT
+            dft = np.abs(np.fft.fft(x))
+            #Autocorrelation
+            acf = np.correlate(x, x, 'full')[len(dft)-1:]
+            dft = dft[1:]
+            acf = acf[1:]
+            idx = len(x)/np.arange(1, len(x), dtype=np.float64)
+            idx = idx[::-1]
+            acf = acf[::-1]
+            idxx = np.arange(1, len(x), dtype=np.float64)
+            acfwarp = interp.spline(idx, acf, idxx)
+            plt.subplot(411)
+            plt.plot(x)
+            plt.subplot(412)
+            plt.plot(dft)
+            plt.subplot(413)
+            plt.plot(acfwarp)
+            plt.subplot(414)
+            plt.plot(dft*acfwarp)
+            plt.show()
+        print "TODO"
+
 #Save a file which auralizes a number of tempos
 #tempos: an array of tempos in beats per minute
 #Fs: Sample rate, NSeconds: Number of seconds to go
@@ -308,8 +348,10 @@ def makeMetronomeSound(tempos, Fs, NSeconds, filename):
     sio.wavfile.write(filename, Fs, X)  
 
 if __name__ == '__main__':
-    #36, 135, 171, 340
-    makeMetronomeSound([171], 44100, 8, 'metronome.wav')
+    s = BeatingSound()
+    s.loadAudio("examples1/train1.wav")
+    s.getMFCCNoveltyFn(2048, 128, 8000)
+    s.getDFTACFHadamardBlocks(600, 100)
 
 if __name__ == '__main__2':
     s = BeatingSound()
