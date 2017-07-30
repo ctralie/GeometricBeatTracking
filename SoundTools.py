@@ -14,6 +14,9 @@ import essentia
 from essentia import Pool, array
 from essentia.standard import *
 
+import sys
+sys.path.append("SuperFlux")
+import SuperFlux
 
 
 BATCHSIZE = 50 #Batch size for computing left hand singular vectors, tradeoff between memory and speed
@@ -36,7 +39,8 @@ class BeatingSound(object):
         self.filename = filename
         fileparts = filename.split(".")
         if not fileparts[-1] == "wav":
-            os.remove("temp.wav")
+            if os.path.exists("temp.wav"):
+                os.remove("temp.wav")
             subprocess.call(["avconv", "-i", filename, "temp.wav"])
             #self.XAudio, self.Fs = librosa.load("temp.wav")
             self.Fs, self.XAudio = sio.wavfile.read("temp.wav")
@@ -95,6 +99,35 @@ class BeatingSound(object):
         self.novFn = self.novFn/np.max(self.novFn)
         self.origNovFn = np.array(self.novFn)
     
+    def getSuperfluxNoveltyFn(self, winSize, hopSize):
+        w = SuperFlux.Wav(self.filename)
+#        args = SuperFlux.parser()
+#        # normalize audio
+#        if args.norm:
+#            w.normalize()
+#            args.online = False  # switch to offline mode
+        # down-mix to mono
+        if w.num_channels > 1:
+            w.downmix()
+#        # attenuate signal
+#        if args.att:
+#            w.attenuate(args.att)
+        # create filterbank if needed
+        # re-create filterbank if the sample rate of the audio changes
+        if filt is None or filt.fs != w.sample_rate:
+            filt = SuperFlux.Filter(args.frame_size / 2, w.sample_rate,
+                          args.bands, args.fmin, args.fmax, args.equal)
+            filterbank = filt.filterbank
+        # spectrogram
+        s = SuperFlux.Spectrogram(w, frame_size=args.frame_size, fps=args.fps,
+                        filterbank=filterbank, log=args.log,
+                        mul=args.mul, add=args.add, online=args.online,
+                        block_size=args.block_size, lgd=args.lgd)
+        # use the spectrogram to create an SpectralODF object
+        sodf = SuperFlux.SpectralODF(s, ratio=args.ratio, max_bins=args.max_bins,
+                           diff_frames=args.diff_frames)
+        act = sodf.superflux()
+        s.novFn = act
     
     ######################################################
     ##           External  Onset Functions              ##
@@ -347,17 +380,20 @@ def makeMetronomeSound(tempos, Fs, NSeconds, filename):
     X = X/np.max(X)
     sio.wavfile.write(filename, Fs, X)  
 
-if __name__ == '__main__':
-    s = BeatingSound()
-    s.loadAudio("examples1/train1.wav")
-    s.getMFCCNoveltyFn(2048, 128, 8000)
-    s.getDFTACFHadamardBlocks(600, 100)
-
 if __name__ == '__main__2':
     s = BeatingSound()
     s.loadAudio("examples1/train1.wav")
-    s.getMFCCNoveltyFn(2048, 128, 8000)
-    s.exportToFnViewer("train1.mat")
+    #s.getMFCCNoveltyFn(2048, 128, 8000)
+    #s.getDFTACFHadamardBlocks(600, 100)
+    s.getSuperfluxNoveltyFn(2048, 128)
+    plt.plot(s.novFn)
+    plt.show()
+
+if __name__ == '__main__':
+    s = BeatingSound()
+    s.loadAudio("journey.wav")
+    s.getMFCCNoveltyFn(2048, 256, 8000)
+    s.exportToFnViewer("journey.mat")
     W = 200
     (Y, S) = s.getSlidingWindowLeftSVD(W)
     V = s.getSlidingWindowRightSVD(W, 3)
@@ -366,4 +402,4 @@ if __name__ == '__main__2':
     plt.subplot(122)
     plt.plot(V[0, :], V[1, :])
     plt.show()
-    s.exportToLoopDitty("train1")
+    s.exportToLoopDitty("journey")

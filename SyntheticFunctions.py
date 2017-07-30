@@ -49,7 +49,7 @@ def getSyntheticPulseTrainRandMicrobeats(NSamples, T, noiseSigma, gaussSigma):
 
 def getSyntheticPulseTrainPerfectMicrobeats(NSamples, T, noiseSigma, gaussSigma):
     x = getPulseTrain(NSamples, T, T, 1, 1)
-    x += getPulseTrain(NSamples, T/2, T/2, 1, 1)
+    x += 0.5*getPulseTrain(NSamples, T/2, T/2, 1, 1)
     y = convolveAndAddNoise(x, gaussSigma, noiseSigma)
     return (x, y)
 
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     T = 300
     NPCs = 20
     noiseSigma = 0.1
-    gaussSigma = 3
+    gaussSigma = 2
     (x, y) = getSyntheticPulseTrainPerfectMicrobeats(10000, T, noiseSigma, gaussSigma)
     s = BeatingSound()
     s.novFn = y

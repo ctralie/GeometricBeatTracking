@@ -7,3 +7,6 @@
 [submodule "LaplacianSimulations/S3DGLPy"]
 	path = LaplacianSimulations/S3DGLPy
 	url = https://github.com/ctralie/S3DGLPy.git
+[submodule "SuperFlux"]
+	path = SuperFlux
+	url = https://github.com/CPJKU/SuperFlux.git
