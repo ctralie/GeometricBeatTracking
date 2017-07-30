@@ -1,12 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-#theta: Circular coordinate estimates
-#s: BeatingSound object (has Fs, nvFn, hopSize)
-#tightness: How much to weight the beat penalty
-#alpha: How much to weight the novelty function
-#Return (onsets, score)
 def getOnsetsDP(theta, s, tightness, alpha = 0.8):
+    """
+    :param theta: Circular coordinate estimates
+    :param s: BeatingSound object (has Fs, nvFn, hopSize)
+    :param tightness: How much to weight the beat penalty
+    :param alpha: How much to weight the novelty function
+    :return (onsets, score)
+    """
     N = theta.size
     
     #Step 1: Estimate the slope at every point in radians per sample,
@@ -53,8 +55,10 @@ def getOnsetsDP(theta, s, tightness, alpha = 0.8):
     b = np.fliplr(b[None, :]).flatten()
     return (b, cscore[b[-1]])
 
-#Run dynamic programming several times on different integer scalings
 def searchTempoRange(theta, s, tightness, alpha):
+    """
+    Run dynamic programming several times on different integer scalings
+    """
     NScales = 9
     AllScores = np.zeros(NScales)
     AllOnsets = []
@@ -67,9 +71,11 @@ def searchTempoRange(theta, s, tightness, alpha):
         AllOnsets.append(onsets)
     return (AllOnsets, AllScores)
 
-#Project sliding windows of the novelty function onto sliding windows
-#of cosine of theta and return the sum of the magnitudes of all projections
 def evalThetas(theta, novFn, W):
+    """
+    Project sliding windows of the novelty function onto sliding windows
+    of cosine of theta and return the sum of the magnitudes of all projections
+    """
     N = len(theta)
     M = N-W+1
     ret = 0.0

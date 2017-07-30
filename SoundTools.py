@@ -18,9 +18,6 @@ import sys
 sys.path.append("SuperFlux")
 import SuperFlux
 
-
-BATCHSIZE = 50 #Batch size for computing left hand singular vectors, tradeoff between memory and speed
-
 class BeatingSound(object):
     def __init__(self):
         self.filename = ""
@@ -215,71 +212,6 @@ class BeatingSound(object):
         plt.stem(onsetsSec, vals)
     
     ######################################################
-    ##       Sliding Window PCA/SVD Functions           ##
-    ######################################################
-    def getSlidingWindowLeftSVD(self, W):
-        #Calculate the left hand singular vectors of the sliding window of
-        #the novelty function
-        N = len(self.novFn)
-        M = N-W+1
-        #Step 1: Calculate the mean delay window
-        self.Mu = np.zeros(W)
-        for i in range(W):
-            self.Mu[i] = np.mean(self.novFn[i:i+M])
-            
-        #Calculate the principal components (left hand singular vectors)
-        #of the embedding
-        start_time = time.time()
-        AAT = np.zeros((W, W))
-        NBatches = int(np.ceil(W/float(BATCHSIZE)))
-        for i in range(NBatches):
-            idxsi = range(i*BATCHSIZE, min((i+1)*BATCHSIZE, W))
-            xi = np.zeros((len(idxsi), M))
-            for k in range(len(idxsi)):
-                xi[k, :] = self.novFn[idxsi[k]:idxsi[k]+M] - self.Mu[idxsi[k]]
-            for j in range(NBatches):
-                idxsj = range(j*BATCHSIZE, min((j+1)*BATCHSIZE, W))
-                xj = np.zeros((M, len(idxsj)))
-                for k in range(len(idxsj)):
-                    xj[:, k] = self.novFn[idxsj[k]:idxsj[k]+M] - self.Mu[idxsj[k]]
-                AAT[idxsi[0]:idxsi[-1]+1, idxsj[0]:idxsj[-1]+1] = xi.dot(xj)
-        end_time = time.time()
-        print "Elapsed time mutliplication: ", end_time - start_time
-        [S, Y] = linalg.eigh(AAT)
-        idx = np.argsort(-S)
-        S[S < 0] = 0 #Numerical precision
-        self.S = np.sqrt(S[idx])
-        self.Y = Y[:, idx]        
-        return (self.Y, self.S)
-    
-    def getSlidingWindowRightSVD(self, W, NPCs):
-        #Calculate "NPCs" scaled right hand singular vectors (i.e. "principal coordinates")
-        N = len(self.novFn)
-        M = N-W+1
-        self.V = np.zeros((NPCs, M))
-        UT = self.Y.T[0:NPCs, :]
-        tic = time.time()
-        for i in range(W):
-            #Sum together outer products
-            UTi = UT[:, i].flatten()
-            x = self.novFn[i:i+M]
-            self.V += UTi[:, None].dot(x[None, :])
-        self.V = (1/self.S[0:NPCs, None])*self.V
-        toc = time.time()
-        print "Elapsed time right SVD: ", toc-tic
-        return self.V
-    
-    def getSlidingWindowFull(self, W):
-        #Return the mean-centered sliding window
-        N = len(self.novFn)
-        M = N-W+1
-        X = np.zeros((W, M))
-        for i in range(W):
-            X[i, :] = self.novFn[i:i+M]
-        X = X - np.mean(X, 1, keepdims = True)
-        return X
-    
-    ######################################################
     ##               Novelty Smoothing                  ##
     ######################################################
     #Apply Gaussian smoothing to the novelty function
@@ -296,26 +228,6 @@ class BeatingSound(object):
         fidx = int(np.round((1.0/W)*N))
         f[fidx:-fidx] = 0
         self.novFn = np.abs(np.fft.ifft(f))
-        
-    
-    #Find the nearest valid delay embedding only using certain principal components
-    #idxs is the indices of the principal components to use
-    def slidingWindowDenoising(self, idxs):
-        N = len(self.novFn)
-        M = self.V.shape[1]
-        NPCs = self.V.shape[0]
-        U = self.Y[:, idxs]
-        W = U.shape[0]
-        V = self.V
-        S = np.eye(U.shape[1])
-        np.fill_diagonal(S, self.S[idxs])
-        res = np.zeros(N)
-        counts = np.zeros(N)
-        for i in range(W):
-            Window = (U[i, :].dot(S)).dot(V[idxs, :])
-            res[i:i+M] += Window/np.sqrt(np.sum(Window**2))
-            counts[i:i+M] += 1.0
-        return res/counts
 
     ######################################################
     ##         Other Signal Processing Stuff            ##

@@ -1,7 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from SoundTools import *
-from CircularCoordinates import *
 
 def getPulseTrain(NSamples, TMin, TMax, AmpMin, AmpMax):
     x = np.zeros(NSamples)
@@ -53,34 +51,3 @@ def getSyntheticPulseTrainPerfectMicrobeats(NSamples, T, noiseSigma, gaussSigma)
     y = convolveAndAddNoise(x, gaussSigma, noiseSigma)
     return (x, y)
 
-if __name__ == "__main__":
-    np.random.seed(100)
-    T = 300
-    NPCs = 20
-    noiseSigma = 0.1
-    gaussSigma = 2
-    (x, y) = getSyntheticPulseTrainPerfectMicrobeats(10000, T, noiseSigma, gaussSigma)
-    s = BeatingSound()
-    s.novFn = y
-    s.origNovFn = y
-    s.hopSize = 128
-    s.Fs = 44100
-    
-    NPCs = 0
-    pca = None
-    if NPCs > 0:
-        pca = PCA(n_components = NPCs)
-    gaussWin = 20
-    W = 600
-    
-    for Kappa in [0.01, 0.025, 0.05, 0.1, 0.2]:
-        theta = getCircularCoordinatesBlocks(s, W, pca, 600, 100, None, 3, denoise = True, doPlot = True, Kappa = Kappa)
-        (onsets, score) = getOnsetsDP(theta, s, 6, 0.4)
-        plt.clf()
-        plt.subplot(211)
-        plt.plot(y)
-        plt.subplot(212)
-        onsetsSec = onsets*float(s.hopSize)/s.Fs
-        vals = theta[onsets]
-        plt.stem(onsetsSec, vals)
-        plt.show()
