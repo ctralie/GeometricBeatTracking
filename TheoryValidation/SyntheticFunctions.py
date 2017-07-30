@@ -12,17 +12,28 @@ def getPulseTrain(NSamples, TMin, TMax, AmpMin, AmpMax):
         x[i] = AmpMin + (AmpMax-AmpMin)*np.random.randn()  
     return x
 
-def convolveAndAddNoise(x, gaussSigma, noiseSigma):
+def convolveGaussAndAddNoise(x, gaussSigma, noiseSigma):
     gaussSigma = int(np.round(gaussSigma*3))
     g = np.exp(-(np.arange(-gaussSigma, gaussSigma+1, dtype=np.float64))**2/(2*gaussSigma**2))
     x = np.convolve(x, g, 'same')
     x = x + noiseSigma*np.random.randn(len(x))
     return x
 
-def getSyntheticPulseTrain(NSamples, T, noiseSigma, gaussSigma):
+def getPerfectPulseTrain(NSamples, Ts):
     x = np.zeros(NSamples)
-    x[0::T] = 1
-    x = convolveAndAddNoise(x, gaussSigma, noiseSigma)
+    for T in Ts:
+        x[0::T] += 1
+    return x
+
+def getGaussianPulseTrain(NSamples, Ts, noiseSigma, gaussSigma):
+    x = getPerfectPulseTrain(NSamples, Ts)
+    x = convolveGaussAndAddNoise(x, gaussSigma, noiseSigma)
+    return x
+
+def getRectPulseTrain(NSamples, Ts, rectWidth = 3):
+    x = getPerfectPulseTrain(NSamples, Ts)
+    g = np.ones(rectWidth)
+    x = np.convolve(x, g, 'same')
     return x
 
 def getSyntheticPulseTrainFreqAmpDrift(NSamples, TMin, TMax, AmpMin, AmpMax, noiseSigma, gaussSigma):

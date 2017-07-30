@@ -60,3 +60,6 @@ def getLapCircularCoordinatesSigma(X, sigma, weighted = False):
     (theta, thetau) = getLapThetas(v, 1, 2)
     return {'w':w, 'v':v, 'theta':theta, 'thetau':thetau, 'A':A, 'D':D}
 
+def getThresholdsFromPDs(PDs):
+    N = len(PDs)
+
