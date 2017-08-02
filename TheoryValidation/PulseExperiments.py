@@ -23,10 +23,16 @@ def lcm(xs):
         ret = lcm2(ret, xs[i])
     return ret
 
-def getFacStr(facs):
+def getFacStr(facs, delim = "_"):
     ret = "%i"%facs[0]
     for i in range(1, len(facs)):
-        ret = "%s_%i"%(ret, facs[i])
+        ret = "%s%s%i"%(ret, delim, facs[i])
+    return ret
+
+def getFacAmpStr(facs, amps):
+    ret = "%i (%.3g)"%(facs[0], amps[0])
+    for i in range(1, len(facs)):
+        ret = "%s, %i (%.3g)"%(ret, facs[i], amps[i])
     return ret
 
 if __name__ == "__main__":
@@ -35,24 +41,26 @@ if __name__ == "__main__":
     noiseSigma = 0
     gaussSigma = 4
     NPerPeriod = 400 #Target number of samples per period
-    
-    for facs in [(1, 12)]:#[(1, 2), (3, 4), (1, 6), (1, 3, 9)]:#, (1, 3), (1, 4), (1, 5), (1, 6), (1, 7)]:
+
+    for params in [{'facs':(1, 2, 4), 'amps':(2, 1, 1)}]:#[(1, 12), (1, 2), (3, 4), (1, 6), (1, 3, 9)]:#, (1, 3), (1, 4), (1, 5), (1, 6), (1, 7)]:
+        facs = params['facs']
+        amps = params['amps']
         n0 = lcm(facs)
         f = np.ceil(float(NPerPeriod)/n0)
         T = int(n0*f)
         Ts = [int(T/k) for k in facs]
         N = T*3
-        
+
         print "facs = %s, Ts = %s"%(facs, Ts)
-        
-        xP = getPerfectPulseTrain(N, Ts)
-        xR = getGaussianPulseTrain(N, Ts, noiseSigma, gaussSigma)
+
+        xP = getPerfectPulseTrain(N, Ts, amps)
+        xR = getGaussianPulseTrain(N, Ts, amps, noiseSigma, gaussSigma)
         Win = T*2
 
         YP = getSlidingWindowNoInterp(xP, Win)
         YR = getSlidingWindowNoInterp(xR, Win)
-        
-        
+
+
         #Plot perfect pulse thresholds
         plt.figure(figsize=(12, 5))
         plt.subplot(121)
@@ -64,16 +72,16 @@ if __name__ == "__main__":
         plt.imshow(D, cmap = 'afmhot', interpolation = 'nearest')
         plt.title("%s"%np.unique(D))
         plt.savefig("SSM%s.png"%getFacStr(facs), bbox_inches='tight')
-        
-        
+
+
         plt.figure(figsize=((len(fields)+2)*4, 4))
         plt.subplot(1, len(fields)+1, 1)
         plt.plot(np.arange(len(xR)), xR, 'b')
         plt.hold(True)
         plt.plot(np.arange(Win), xR[0:Win], 'r')
-        
+
         AllPDs = []
-        
+
         for i in range(len(fields)):
             f = fields[i]
             print "Doing field %i"%f
@@ -82,5 +90,5 @@ if __name__ == "__main__":
             AllPDs.append(PDs[1])
             plotDGM(PDs[1], color = 'b')
             plt.title("$\mathbb{Z}%i$"%f)
-        
+
         plt.savefig("%s.svg"%getFacStr(facs), bbox_inches = 'tight')

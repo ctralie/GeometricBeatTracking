@@ -60,6 +60,12 @@ def getLapCircularCoordinatesSigma(X, sigma, weighted = False):
     (theta, thetau) = getLapThetas(v, 1, 2)
     return {'w':w, 'v':v, 'theta':theta, 'thetau':thetau, 'A':A, 'D':D}
 
-def getThresholdsFromPDs(PDs):
-    N = len(PDs)
+def getLapCircularCoordinatesThresh(pD, thresh):
+    D = np.array(pD)
+    np.fill_diagonal(D, np.inf)
+    A = np.zeros(D.shape)
+    A[D <= thresh] = 1
+    (w, v, L) = getLaplacianEigsDense(A, 10)
+    (theta, thetau) = getLapThetas(v, 1, 2)
+    return {'w':w, 'v':v, 'theta':theta, 'thetau':thetau, 'A':A, 'D':D}
 

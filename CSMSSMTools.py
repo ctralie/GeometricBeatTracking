@@ -15,6 +15,15 @@ def getCSM(X, Y):
     C[C < 0] = 0
     return np.sqrt(C)
 
+def getCSMCosine(X, Y):
+    XNorm = np.sqrt(np.sum(X**2, 1))
+    XNorm[XNorm == 0] = 1
+    YNorm = np.sqrt(np.sum(Y**2, 1))
+    YNorm[YNorm == 0] = 1
+    D = (X/XNorm[:, None]).dot((Y/YNorm[:, None]).T)
+    D = 1 - D #Make sure distance 0 is the same and distance 2 is the most different
+    return D
+
 def CSMToBinary(D, Kappa):
     N = D.shape[0]
     M = D.shape[1]

@@ -9,7 +9,7 @@ def getPulseTrain(NSamples, TMin, TMax, AmpMin, AmpMax):
         i += TMin + int(np.round(np.random.randn()*(TMax-TMin)))
         if i >= NSamples:
             break
-        x[i] = AmpMin + (AmpMax-AmpMin)*np.random.randn()  
+        x[i] = AmpMin + (AmpMax-AmpMin)*np.random.randn()
     return x
 
 def convolveGaussAndAddNoise(x, gaussSigma, noiseSigma):
@@ -19,19 +19,20 @@ def convolveGaussAndAddNoise(x, gaussSigma, noiseSigma):
     x = x + noiseSigma*np.random.randn(len(x))
     return x
 
-def getPerfectPulseTrain(NSamples, Ts):
+def getPerfectPulseTrain(NSamples, Ts, amps):
     x = np.zeros(NSamples)
-    for T in Ts:
-        x[0::T] += 1
+    for i in range(len(Ts)):
+        T = Ts[i]
+        x[0::T] += amps[i]
     return x
 
-def getGaussianPulseTrain(NSamples, Ts, noiseSigma, gaussSigma):
-    x = getPerfectPulseTrain(NSamples, Ts)
+def getGaussianPulseTrain(NSamples, Ts, amps, noiseSigma, gaussSigma):
+    x = getPerfectPulseTrain(NSamples, Ts, amps)
     x = convolveGaussAndAddNoise(x, gaussSigma, noiseSigma)
     return x
 
-def getRectPulseTrain(NSamples, Ts, rectWidth = 3):
-    x = getPerfectPulseTrain(NSamples, Ts)
+def getRectPulseTrain(NSamples, Ts, amps, rectWidth = 3):
+    x = getPerfectPulseTrain(NSamples, Ts, amps)
     g = np.ones(rectWidth)
     x = np.convolve(x, g, 'same')
     return x
@@ -61,4 +62,3 @@ def getSyntheticPulseTrainPerfectMicrobeats(NSamples, T, noiseSigma, gaussSigma)
     x += 0.5*getPulseTrain(NSamples, T/2, T/2, 1, 1)
     y = convolveAndAddNoise(x, gaussSigma, noiseSigma)
     return (x, y)
-

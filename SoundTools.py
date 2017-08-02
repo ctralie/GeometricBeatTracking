@@ -168,18 +168,6 @@ class BeatingSound(object):
         X[:, 0] = np.arange(X.shape[0])
         X[:, 1] = Fn
         sio.savemat(filename, {"soundfilename":self.filename, "SampleDelays":SampleDelays, "Fs":self.Fs, "X":X})
-
-    #Export to web interface for synchronized visualization
-    #This function expects that SlidingWindowRightSVD has been computed
-    def exportToLoopDitty(self, outprefix):
-        #Output information text file
-        fout = open("%s.txt"%outprefix, "w")
-        for i in range(self.V.shape[1]):
-            fout.write("%g,%g,%g,%g,"%(self.V[0, i], self.V[1, i], self.V[2, i], i*float(self.hopSize)/self.Fs))
-        fout.write("%g"%(np.sum(self.S[0:3])/np.sum(self.S)))
-        fout.close()
-        #Output audio information
-        sio.wavfile.write("%s.wav"%outprefix, self.Fs, self.XAudio)
     
     def exportToCircCoordinatesGUI(self, theta, outprefix):
         fout = open("%s.txt"%outprefix, "w")
@@ -303,15 +291,6 @@ if __name__ == '__main__2':
 
 if __name__ == '__main__':
     s = BeatingSound()
-    s.loadAudio("journey.wav")
+    s.loadAudio("examples1/train4.wav")
     s.getMFCCNoveltyFn(2048, 256, 8000)
-    s.exportToFnViewer("journey.mat")
-    W = 200
-    (Y, S) = s.getSlidingWindowLeftSVD(W)
-    V = s.getSlidingWindowRightSVD(W, 3)
-    plt.subplot(121)
-    plt.imshow(Y[:, 0:40], interpolation = 'none', aspect = 'auto')
-    plt.subplot(122)
-    plt.plot(V[0, :], V[1, :])
-    plt.show()
-    s.exportToLoopDitty("journey")
+    s.exportToFnViewer("train4.mat")
