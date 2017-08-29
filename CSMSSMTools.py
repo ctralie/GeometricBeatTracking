@@ -40,7 +40,7 @@ def CSMToBinary(D, Kappa):
     ret = sparse.coo_matrix((V, (I, J)), shape=(N, M))
     return ret.toarray()
 
-def quantizeCSM(D, NLevels):
+def quantizeCSM(D, NLevels, retidx = False):
     """
     LLoyd Max quantizer of CSM
     :param D: CSM
@@ -52,7 +52,10 @@ def quantizeCSM(D, NLevels):
     levels = kmeans(d, NLevels)[0]
     diff = np.abs(d[:, None] - levels[None, :])
     idx = np.argmin(diff, 1)
-    d = levels[idx]
+    if retidx:
+        d = idx
+    else:
+        d = levels[idx]
     return np.reshape(d, D.shape)
     
 

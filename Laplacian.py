@@ -6,6 +6,7 @@ import numpy as np
 import numpy.linalg as linalg
 import scipy.io as sio
 import matplotlib.pyplot as plt
+from scipy.ndimage.filters import median_filter
 from CSMSSMTools import *
 
 def getLaplacianEigs(A, NEigs):
@@ -76,3 +77,51 @@ def getLapCircularCoordinatesThresh(pD, thresh, doPlot = False):
         plt.imshow(v, cmap = 'afmhot', aspect = 'auto', interpolation = 'none')
     return {'w':w, 'v':v, 'theta':theta, 'thetau':thetau, 'A':A, 'D':D}
 
+def getLineLaplacian(NPoints):
+    I = np.arange(NPoints-1).tolist()
+    J = np.arange(NPoints-1)
+    J = J + 1
+    J = J.tolist()
+    IF = np.array(I + J)
+    JF = np.array(J + I)
+    A = scipy.sparse.coo_matrix((np.ones(len(IF)), (IF, JF)), shape=(NPoints, NPoints)).tocsr()
+    DEG = sparse.dia_matrix((A.sum(1).flatten(), 0), A.shape)
+    L = DEG - A
+    return L
+
+def sinusoidalScore(x, medianFilter = True, doPlot = False):
+    """
+    Return a score between [0, 1] that indicates how sinusoidal 
+    a signal is.  0 for not sinusoidal and 1 for sinusoidal
+    """
+    A = getLineLaplacian(len(x))
+    d = A.dot(x)
+    x1 = np.array(x)
+    if medianFilter:
+        x1 = median_filter(x1, 5)
+    #Take care of boundary problems with the laplacian
+    x1[0] = x1[1]
+    x1[-1] = x1[-2]
+    d[0] = d[1]
+    d[-1] = d[-2]
+    x1 = x/np.sqrt(np.sum(x**2))
+    x2 = d/np.sqrt(np.sum(d**2))
+    #Metric on projective plane
+    score = 1 - np.arccos(np.abs(np.sum(x1*x2)))/(np.pi/2)
+    if doPlot:
+        plt.plot(x1, 'r')
+        plt.plot(x2, 'b')
+        plt.title("Score = %g"%score)
+    return score
+
+if __name__ == '__main__':
+    N = 200
+    NPeriods = 1
+    t = 2*np.pi*NPeriods*np.arange(N)/N
+    s = np.sin(t)
+    c = np.cos(t)
+    c += np.cos(3*t)
+    #c += t
+    
+    sinusoidalScore(c, True)
+    plt.show()
