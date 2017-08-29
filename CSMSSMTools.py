@@ -43,7 +43,18 @@ def CSMToBinary(D, Kappa):
 def quantizeCSM(D, NLevels):
     """
     LLoyd Max quantizer of CSM
+    :param D: CSM
+    :param NLevels: Number of quantization levels
+    :return: Quantized CSM
     """
+    from scipy.cluster.vq import kmeans
+    d = D.flatten()
+    levels = kmeans(d, NLevels)[0]
+    diff = np.abs(d[:, None] - levels[None, :])
+    idx = np.argmin(diff, 1)
+    d = levels[idx]
+    return np.reshape(d, D.shape)
+    
 
 def getW(D, Kappa, Mu = 0.5):
     """
