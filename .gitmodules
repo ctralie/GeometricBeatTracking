@@ -4,9 +4,6 @@
 [submodule "Datasets/BallroomAnnotations"]
 	path = Datasets/BallroomAnnotations
 	url = https://github.com/CPJKU/BallroomAnnotations.git
-[submodule "SuperFlux"]
-	path = SuperFlux
-	url = https://github.com/CPJKU/SuperFlux.git
 [submodule "ripser"]
 	path = ripser
 	url = https://github.com/Ripser/ripser

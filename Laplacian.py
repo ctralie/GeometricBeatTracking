@@ -60,12 +60,19 @@ def getLapCircularCoordinatesSigma(X, sigma, weighted = False):
     (theta, thetau) = getLapThetas(v, 1, 2)
     return {'w':w, 'v':v, 'theta':theta, 'thetau':thetau, 'A':A, 'D':D}
 
-def getLapCircularCoordinatesThresh(pD, thresh):
+def getLapCircularCoordinatesThresh(pD, thresh, doPlot = False):
     D = np.array(pD)
     np.fill_diagonal(D, np.inf)
     A = np.zeros(D.shape)
     A[D <= thresh] = 1
     (w, v, L) = getLaplacianEigsDense(A, 10)
     (theta, thetau) = getLapThetas(v, 1, 2)
+    if doPlot:
+        plt.subplot(131)
+        plt.imshow(D, cmap = 'afmhot', interpolation = 'none')
+        plt.subplot(132)
+        plt.imshow(A, cmap = 'gray', interpolation = 'none')
+        plt.subplot(133)
+        plt.imshow(v, cmap = 'afmhot', aspect = 'auto', interpolation = 'none')
     return {'w':w, 'v':v, 'theta':theta, 'thetau':thetau, 'A':A, 'D':D}
 

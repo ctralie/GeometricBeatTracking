@@ -1,8 +1,8 @@
-from SyntheticFunctions import *
 from TDA import *
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 import scipy.io as sio
+import scipy.interpolate as interp
 
 def getSlidingWindow(x, dim, Tau, dT):
     N = len(x)

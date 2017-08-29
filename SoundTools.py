@@ -7,16 +7,10 @@ import matplotlib.pyplot as plt
 import subprocess
 import os
 import time
-
 import librosa
-
 import essentia
 from essentia import Pool, array
 from essentia.standard import *
-
-import sys
-sys.path.append("SuperFlux")
-import SuperFlux
 
 class BeatingSound(object):
     def __init__(self):
@@ -96,55 +90,55 @@ class BeatingSound(object):
         self.novFn = self.novFn/np.max(self.novFn)
         self.origNovFn = np.array(self.novFn)
     
-    def getSuperfluxNoveltyFn(self, winSize, hopSize):
-        w = SuperFlux.Wav(self.filename)
-#        args = SuperFlux.parser()
-#        # normalize audio
-#        if args.norm:
-#            w.normalize()
-#            args.online = False  # switch to offline mode
-        # down-mix to mono
-        if w.num_channels > 1:
-            w.downmix()
-#        # attenuate signal
-#        if args.att:
-#            w.attenuate(args.att)
-        # create filterbank if needed
-        # re-create filterbank if the sample rate of the audio changes
-        if filt is None or filt.fs != w.sample_rate:
-            filt = SuperFlux.Filter(args.frame_size / 2, w.sample_rate,
-                          args.bands, args.fmin, args.fmax, args.equal)
-            filterbank = filt.filterbank
-        # spectrogram
-        s = SuperFlux.Spectrogram(w, frame_size=args.frame_size, fps=args.fps,
-                        filterbank=filterbank, log=args.log,
-                        mul=args.mul, add=args.add, online=args.online,
-                        block_size=args.block_size, lgd=args.lgd)
-        # use the spectrogram to create an SpectralODF object
-        sodf = SuperFlux.SpectralODF(s, ratio=args.ratio, max_bins=args.max_bins,
-                           diff_frames=args.diff_frames)
-        act = sodf.superflux()
-        s.novFn = act
+    #http://madmom.readthedocs.io/en/latest/modules/features/onsets.html
+    def getSuperfluxNoveltyFn(self):
+        import madmom
+        log_filt_spec = madmom.audio.spectrogram.LogarithmicFilteredSpectrogram(self.filename, num_bands = 24)
+        self.novFn = madmom.features.onsets.superflux(log_filt_spec)
+        #Madmom default hopsize/window size
+        self.hopSize = 411
+        self.winSize = 2048
+
+    def getComplexfluxNoveltyFn(self):
+        import madmom
+        log_filt_spec = madmom.audio.spectrogram.LogarithmicFilteredSpectrogram(self.filename, num_bands = 24)
+        self.novFn = madmom.features.onsets.complex_flux(log_filt_spec)
+        #Madmom default hopsize/window size
+        self.hopSize = 411
+        self.winSize = 2048
     
     ######################################################
     ##           External  Onset Functions              ##
     ######################################################
     #Other implementations that I'm comparing to
     
-    #Call librosa to get the dynamic programming onsets for comparison
     def getEllisLibrosaOnsets(self):
+        """
+        Call librosa to get the dynamic programming onsets for comparison
+        """
         (tempo, beats) = librosa.beat.beat_track(self.XAudio, self.Fs, hop_length = self.hopSize)
         return beats
     
-    #Call Essentia's implementation of Degara's technique
-    def getDegaraOnsets(self):
+    def getDegaraOnsets(self, tempo = None):
+        """
+        Call Essentia's implementation of Degara's technique
+        """
         X = essentia.array(self.XAudio)
-        b = BeatTrackerDegara()
+        if tempo:
+            t1 = int(np.round(tempo*0.9))
+            t2 = int(np.round(tempo*1.1))
+            if t2 - t1 < 20:
+                t2 = t1 + 20
+            b = BeatTrackerDegara(minTempo = t1, maxTempo = t2)
+        else:
+            b = BeatTrackerDegara()
         beats = np.array(np.round(b(X)*self.Fs/self.hopSize), dtype=np.int64)
         return beats
     
-    #Call the multi feature beat tracker in Essentia
     def getMultiFeatureOnsets(self):
+        """
+        Call the multi feature beat tracker in Essentia
+        """
         X = essentia.array(self.XAudio)
         b = BeatTrackerMultiFeature()
         beats = np.array(np.round(b(X)[0]*self.Fs/self.hopSize), dtype=np.int64)
@@ -155,7 +149,19 @@ class BeatingSound(object):
             i = self.Y.shape[0]-1
         return float(i)*self.hopSize/self.Fs
 
-
+    def getMadmomTempo(self):
+        """
+        Call Madmom Tempo Estimation
+        :return: Array of tempos sorted in decreasing order of strength
+        """
+        from madmom.features.beats import RNNBeatProcessor
+        from madmom.features.tempo import TempoEstimationProcessor
+        act = RNNBeatProcessor()(self.filename)
+        proc = TempoEstimationProcessor(fps=100)
+        res = proc(act)
+        return res[:, 0]
+        
+    
     ######################################################
     ##               Exporting Functions                ##
     ######################################################
@@ -202,15 +208,19 @@ class BeatingSound(object):
     ######################################################
     ##               Novelty Smoothing                  ##
     ######################################################
-    #Apply Gaussian smoothing to the novelty function
     def smoothNovFn(self, W):
+        """
+        Apply Gaussian smoothing to the novelty function
+        """
         t = np.linspace(-1, 1, W)
         g = np.exp(-t**2/0.25)
         g = g/np.sum(g)
         self.novFn = np.convolve(self.origNovFn, g, 'same')
     
     def lowpassNovFn(self, W):
-        #Do an ideal lowpass filter on blocks of the novelty function
+        """
+        Do an ideal lowpass filter on blocks of the novelty function
+        """
         f = np.fft.fft(self.origNovFn)
         N = len(f)
         fidx = int(np.round((1.0/W)*N))
@@ -256,11 +266,13 @@ class BeatingSound(object):
             plt.show()
         print "TODO"
 
-#Save a file which auralizes a number of tempos
-#tempos: an array of tempos in beats per minute
-#Fs: Sample rate, NSeconds: Number of seconds to go
-#filename: Output filename (must be a .wav file)
 def makeMetronomeSound(tempos, Fs, NSeconds, filename):
+    """
+    Save a file which auralizes a number of tempos
+    :param tempos: an array of tempos in beats per minute
+    :param Fs: Sample rate, NSeconds: Number of seconds to go
+    :param filename: Output filename (must be a .wav file)
+    """
     blipsamples = int(np.round(0.02*Fs))
     blip = np.cos(2*np.pi*np.arange(blipsamples)*440.0/Fs)
     #blip = np.array(blip*np.max(np.abs(YAudio)), dtype=YAudio.dtype)
@@ -290,7 +302,15 @@ if __name__ == '__main__2':
     plt.show()
 
 if __name__ == '__main__':
+    from DynProgOnsets import *
     s = BeatingSound()
     s.loadAudio("examples1/train4.wav")
-    s.getMFCCNoveltyFn(2048, 256, 8000)
-    s.exportToFnViewer("train4.mat")
+    #s.loadAudio("sting.wav")
+    s.getSuperfluxNoveltyFn()
+    T = 85
+    onsetsDeg = s.getDegaraOnsets(T)
+    slope = 2*np.pi*s.hopSize*T/(60*s.Fs)
+    theta = np.arange(len(s.novFn))*slope
+    (onsetsDP, score) = getOnsetsDP(theta, s, 6, alpha = 0.8)
+    s.exportOnsetClicks("Erykah.wav", onsetsDeg)
+    #s.exportOnsetClicks("StingNovFn.wav", onsetsDeg)

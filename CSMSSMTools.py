@@ -40,6 +40,11 @@ def CSMToBinary(D, Kappa):
     ret = sparse.coo_matrix((V, (I, J)), shape=(N, M))
     return ret.toarray()
 
+def quantizeCSM(D, NLevels):
+    """
+    LLoyd Max quantizer of CSM
+    """
+
 def getW(D, Kappa, Mu = 0.5):
     """
     Return affinity matrix
