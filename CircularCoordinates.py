@@ -51,13 +51,14 @@ def getAverageSlope(thetas):
     Ds = thetas[None, :] - thetas[:, None]
     norm = idx[None, :] - idx[:, None]
     [J, I] = np.meshgrid(idx, idx)
-    return np.mean(Ds[I < J]/norm[I < J])
+    #return np.mean(Ds[I < J]/norm[I < J])
+    return (thetas[-1] - thetas[0])/float(len(thetas)-1)
 
 
 def getPDsFields(D, times, fields = [2, 3, 5, 7], doPlot = False):
     AllPDs = []
     plt.figure(figsize=((len(fields)+1)*5, 5))
-    
+
     if doPlot:
         plt.subplot(1, len(fields)+1, 1)
         plt.imshow(D, extent = (0, times[D.shape[1]-1], times[D.shape[1]-1], 0), cmap = 'afmhot', interpolation = 'nearest')
@@ -73,13 +74,13 @@ def getPDsFields(D, times, fields = [2, 3, 5, 7], doPlot = False):
             if doPlot:
                 plt.subplot(1, len(fields)+1, 2+i)
                 plotDGM(PDs[1], color = 'b')
-                plt.xlim([0, ymax])
-                plt.ylim([0, ymax])
+                #plt.xlim([0, ymax])
+                #plt.ylim([0, ymax])
         if doPlot:
             plt.title("$\mathbb{Z}%i$"%f)
     return AllPDs
 
-def getTemposBlocks(s, Win, BlockWin, BlockHop, NFuseBlocks, SkipBlocks, QuantLevels = 10, plotIndividualBlocks = False, plotFusion = False, plotCoords = False):
+def getTemposBlocks(s, Win, BlockWin, BlockHop, NFuseBlocks, SkipBlocks, SNFK = 15, QuantLevels = 10, plotIndividualBlocks = False, plotFusion = False, plotCoords = False):
     """
     Get tempos in blocks of audio
     :param s: A BeatingSound object holding a computed novelty function / window size / hop size
@@ -88,13 +89,15 @@ def getTemposBlocks(s, Win, BlockWin, BlockHop, NFuseBlocks, SkipBlocks, QuantLe
     :param BlockHop: Hop length between overlapping blocks
     :param NFuseBlocks: The number of blocks to fuse within a superblock
     :param SkipBlocks: The number of blocks to skip between superblocks
-    :param QuantLevels: 
+    :param SNFK: The number of neighbors to use in similarity network fusion
+    :param QuantLevels: The number of quantization levels
     """
     x = s.novFn
     Fs = s.Fs
     hopSize = s.hopSize
     winSize = s.winSize
     NBlocks = (len(x) - BlockWin)/BlockHop + 1
+    print "NBlocks = ", NBlocks
     Ds = []
     if plotIndividualBlocks:
         plt.figure(figsize=(10, 10))
@@ -105,6 +108,8 @@ def getTemposBlocks(s, Win, BlockWin, BlockHop, NFuseBlocks, SkipBlocks, QuantLe
         YR = YR - np.mean(YR, 1)[:, None]
         YR = YR/np.sqrt(np.sum(YR**2, 1))[:, None]
         D = getSSM(YR)
+        #D = getCSML1(YR, YR)
+        #D = np.log(D+0.01)
         #DQuantized = quantizeCSM(D, 10)
         ymax = int(np.ceil(np.max(D)*1.1)) #For plotting everything on the same scale
         if plotIndividualBlocks:
@@ -120,38 +125,60 @@ def getTemposBlocks(s, Win, BlockWin, BlockHop, NFuseBlocks, SkipBlocks, QuantLe
             plt.scatter(np.arange(D.shape[0]), D[0, :], 5, c = 'r', edgecolor = 'none')
             plt.title("SSM Row 0")
             plt.subplot(223)
-            plt.imshow(D, extent = (times[0], times[int(D.shape[1]*dT)-1], times[int(D.shape[1]*dT)-1], times[0]), cmap = 'afmhot', interpolation = 'nearest')
+            plt.imshow(D, extent = (times[0], times[-1], times[-1], times[0]), cmap = 'afmhot', interpolation = 'nearest')
             plt.title("SSM")
             plt.subplot(224)
             #plt.imshow(DQuantized, extent = (times[0], times[int(D.shape[1]*dT)-1], times[int(D.shape[1]*dT)-1], times[0]), cmap = 'afmhot', interpolation = 'nearest')
             plt.title("SSM Quantized")
             plt.savefig("Block%i.svg"%i, bbox_inches = 'tight')
+
+            plt.clf()
+            getPDsFields(D, times, doPlot = True)
+            plt.savefig("Fields%i.svg"%i, bbox_inches = 'tight')
         Ds.append(D)
-    
+
 
     if plotCoords:
         plt.figure(figsize=(10, 10))
-    
+
     times = np.arange(Ds[0].shape[0])*hopSize/float(Fs)
-    NFused = (NBlocks - NFuseBlocks)/SkipBlocks + 1
+    if NFuseBlocks == -1:
+        NFused = 1
+        NFusedBlocks = NBlocks
+    else:
+        NFused = (NBlocks - NFuseBlocks)/SkipBlocks + 1
     AllTempos = []
     for b in range(NFused):
-        print "Doing similarity fusion on %i matrices of size %ix%i..."%(len(Ds), Ds[0].shape[0], Ds[0].shape[1])
         tic = time.time()
         thisDs = Ds[b*SkipBlocks:b*SkipBlocks+NFuseBlocks]
+        print "Doing similarity fusion on %i matrices of size %ix%i..."%(len(thisDs), Ds[0].shape[0], Ds[0].shape[1])
         PlotNames = []
         if plotFusion:
             PlotNames = ["%i_%i"%(b, i) for i in range(len(DsFused))]
-        DFused = doSimilarityFusion(thisDs, K=QuantLevels, PlotNames = PlotNames)
+        DFused = doSimilarityFusion(thisDs, K=SNFK, PlotNames = PlotNames)
         np.fill_diagonal(DFused, 0)
         np.fill_diagonal(DFused, np.max(DFused))
         DFused = np.max(DFused) - DFused
-        D = quantizeCSM(DFused, 10)
+        D = quantizeCSM(DFused, QuantLevels)
         D = 2*D/np.max(D)
         toc = time.time()
         print "Finished similarity fusion for superblock %i"%b
         print "Elapsed times: ", toc - tic, " seconds"
 
+        if plotCoords:
+            plt.clf()
+            plt.subplot(221)
+            plt.imshow(DFused, extent = (0, times[-1], 0, times[-1]), interpolation = 'nearest', cmap = 'afmhot')
+            plt.title("Original")
+            plt.subplot(222)
+            plt.imshow(D, extent = (0, times[-1], 0, times[-1]), interpolation = 'nearest', cmap = 'afmhot')
+            plt.title("Quantized")
+            plt.subplot(223)
+            plt.plot(times, DFused[0, :])
+            plt.title("Original Row 0")
+            plt.savefig("SNFBlock%i.svg"%b, bbox_inches = 'tight')
+
+        """
         threshs = np.unique(D.flatten())
         threshs = threshs[0:-1]
         CircCoords = getCircularCoordsFromThreshs(D, threshs)
@@ -173,6 +200,7 @@ def getTemposBlocks(s, Win, BlockWin, BlockHop, NFuseBlocks, SkipBlocks, QuantLe
                 plt.scatter(V[:, 0], V[:, 1])
                 plt.subplot(224)
                 D = CircCoords[i]['A']
-                plt.imshow(D, cmap = 'gray', interpolation = 'none')
+                plt.imshow(D, cmap = 'gray', interpolation = 'nearest')
                 plt.savefig("CoordsReal%i_%i.svg"%(b, i), bbox_inches = 'tight')
+        """
     return np.array(AllTempos)

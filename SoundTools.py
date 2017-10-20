@@ -25,7 +25,7 @@ class BeatingSound(object):
         self.X = np.array([[]]) #Mel spectrogram
         self.novFn = np.array([]) #Novelty function
         self.origNovFn = np.array([]) #Original novelty function before smoothing/denoising
-        
+
     def loadAudio(self, filename):
         self.filename = filename
         fileparts = filename.split(".")
@@ -43,14 +43,14 @@ class BeatingSound(object):
             print self.XAudio.shape
         print "Fs = %i"%self.Fs
         self.XAudio = librosa.core.to_mono(self.XAudio)
-    
+
     def processSpecgram(self, winSize, hopSize, pfmax):
         [self.winSize, self.hopSize, self.fmax] = [winSize, hopSize, pfmax]
         self.S = librosa.core.stft(self.XAudio, winSize, hopSize)
         self.M = librosa.filters.mel(self.Fs, winSize, fmax = pfmax)
         arg = self.M.dot(np.abs(self.S))
         self.X = librosa.core.logamplitude(arg)
-    
+
     ######################################################
     ##               Novelty Functions                  ##
     ######################################################
@@ -60,12 +60,12 @@ class BeatingSound(object):
         diff[diff < 0] = 0
         self.novFn = np.sum(diff, 0).flatten()
         self.origNovFn = np.array(self.novFn)
-    
+
     def getLibrosaNoveltyFn(self, winSize, hopSize):
         [self.winSize, self.hopSize] = [winSize, hopSize]
         self.novFn = librosa.onset.onset_strength(y = self.XAudio, sr = self.Fs, hop_length = hopSize)
         self.origNovFn = np.array(self.novFn)
-    
+
     def getWeightedPhaseNoveltyFn(self, winSize, hopSize):
         self.S = librosa.core.stft(self.XAudio, winSize, hopSize)
         (mag, phase) = librosa.magphase(self.S)
@@ -75,7 +75,7 @@ class BeatingSound(object):
         self.novFn = np.mean(np.abs(WP), 0)
         self.novFn = self.novFn/np.max(self.novFn)
         self.origNovFn = np.array(self.novFn)
-    
+
     def getEssentiaNoveltyFn(self, hopSize, m):
         #Options: hfc, complex, complex_phase, flux, melflux, rms
         od = OnsetDetection(method=m)
@@ -89,14 +89,14 @@ class BeatingSound(object):
             self.novFn.append(od(mag, phase))
         self.novFn = self.novFn/np.max(self.novFn)
         self.origNovFn = np.array(self.novFn)
-    
+
     #http://madmom.readthedocs.io/en/latest/modules/features/onsets.html
     def getSuperfluxNoveltyFn(self):
         import madmom
         log_filt_spec = madmom.audio.spectrogram.LogarithmicFilteredSpectrogram(self.filename, num_bands = 24)
         self.novFn = madmom.features.onsets.superflux(log_filt_spec)
         #Madmom default hopsize/window size
-        self.hopSize = 411
+        self.hopSize = 441
         self.winSize = 2048
 
     def getComplexfluxNoveltyFn(self):
@@ -104,21 +104,26 @@ class BeatingSound(object):
         log_filt_spec = madmom.audio.spectrogram.LogarithmicFilteredSpectrogram(self.filename, num_bands = 24)
         self.novFn = madmom.features.onsets.complex_flux(log_filt_spec)
         #Madmom default hopsize/window size
-        self.hopSize = 411
+        self.hopSize = 441
         self.winSize = 2048
-    
+
+    def getRNNNoveltyFn(self):
+        from madmom.features.beats import RNNBeatProcessor
+        self.novFn = RNNBeatProcessor()(self.filename)
+        self.hopSize = 441
+
     ######################################################
     ##           External  Onset Functions              ##
     ######################################################
     #Other implementations that I'm comparing to
-    
+
     def getEllisLibrosaOnsets(self):
         """
         Call librosa to get the dynamic programming onsets for comparison
         """
         (tempo, beats) = librosa.beat.beat_track(self.XAudio, self.Fs, hop_length = self.hopSize)
         return beats
-    
+
     def getDegaraOnsets(self, tempo = None):
         """
         Call Essentia's implementation of Degara's technique
@@ -134,7 +139,7 @@ class BeatingSound(object):
             b = BeatTrackerDegara()
         beats = np.array(np.round(b(X)*self.Fs/self.hopSize), dtype=np.int64)
         return beats
-    
+
     def getMultiFeatureOnsets(self):
         """
         Call the multi feature beat tracker in Essentia
@@ -142,8 +147,16 @@ class BeatingSound(object):
         X = essentia.array(self.XAudio)
         b = BeatTrackerMultiFeature()
         beats = np.array(np.round(b(X)[0]*self.Fs/self.hopSize), dtype=np.int64)
-        return beats        
-    
+        return beats
+
+    def getMadmomOnsets(self):
+        from madmom.features.beats import RNNBeatProcessor, DBNBeatTrackingProcessor
+        proc = DBNBeatTrackingProcessor(fps=100)
+        act = RNNBeatProcessor()(self.filename)
+        b = proc(act)
+        beats = np.array(np.round(b*self.Fs/self.hopSize), dtype=np.int64)
+        return beats
+
     def getSampleDelay(self, i):
         if i == -1:
             i = self.Y.shape[0]-1
@@ -160,8 +173,8 @@ class BeatingSound(object):
         proc = TempoEstimationProcessor(fps=100)
         res = proc(act)
         return res[:, 0]
-        
-    
+
+
     ######################################################
     ##               Exporting Functions                ##
     ######################################################
@@ -174,15 +187,15 @@ class BeatingSound(object):
         X[:, 0] = np.arange(X.shape[0])
         X[:, 1] = Fn
         sio.savemat(filename, {"soundfilename":self.filename, "SampleDelays":SampleDelays, "Fs":self.Fs, "X":X})
-    
+
     def exportToCircCoordinatesGUI(self, theta, outprefix):
         fout = open("%s.txt"%outprefix, "w")
         for i in range(len(theta)):
             fout.write("%g,%g,"%(theta[i], i*float(self.hopSize)/self.Fs))
         fout.close()
         #Output audio information
-        sio.wavfile.write("%s.wav"%outprefix, self.Fs, self.XAudio)        
-    
+        sio.wavfile.write("%s.wav"%outprefix, self.Fs, self.XAudio)
+
     def exportOnsetClicks(self, outname, onsets):
         print "Fs = ", self.Fs
         YAudio = np.array(self.XAudio)
@@ -196,7 +209,7 @@ class BeatingSound(object):
         if os.path.exists(outname):
             os.remove(outname)
         subprocess.call(["avconv", "-i", "temp.wav", outname])
-    
+
     def plotOnsets(self, onsets, theta):
         #Plot a stem plot of the onsets on x-axis, and corresponding
         #circular coordinates on y-axis
@@ -204,7 +217,7 @@ class BeatingSound(object):
         onsetsSec = onsets*float(self.hopSize)/self.Fs
         vals = theta[onsets]
         plt.stem(onsetsSec, vals)
-    
+
     ######################################################
     ##               Novelty Smoothing                  ##
     ######################################################
@@ -216,7 +229,7 @@ class BeatingSound(object):
         g = np.exp(-t**2/0.25)
         g = g/np.sum(g)
         self.novFn = np.convolve(self.origNovFn, g, 'same')
-    
+
     def lowpassNovFn(self, W):
         """
         Do an ideal lowpass filter on blocks of the novelty function
@@ -230,7 +243,7 @@ class BeatingSound(object):
     ######################################################
     ##         Other Signal Processing Stuff            ##
     ######################################################
-    
+
     #For comparison with the Quinton paper
     #TODO: Finish this
     def getDFTACFHadamardBlocks(self, BlockLen, BlockHop):
@@ -290,7 +303,10 @@ def makeMetronomeSound(tempos, Fs, NSeconds, filename):
             X[i1:i2] += blip
             i += 1
     X = X/np.max(X)
-    sio.wavfile.write(filename, Fs, X)  
+    sio.wavfile.write(filename, Fs, X)
+
+if __name__ == '__main__2':
+    makeMetronomeSound([83.5], 44100, 10, "train2met.wav")
 
 if __name__ == '__main__2':
     s = BeatingSound()
@@ -309,8 +325,10 @@ if __name__ == '__main__':
     s.getSuperfluxNoveltyFn()
     T = 85
     onsetsDeg = s.getDegaraOnsets(T)
+    onsetsBock = s.getMadmomOnsets()
+    print onsetsBock
+    s.exportOnsetClicks("Erykah.wav", onsetsBock)
     slope = 2*np.pi*s.hopSize*T/(60*s.Fs)
     theta = np.arange(len(s.novFn))*slope
     (onsetsDP, score) = getOnsetsDP(theta, s, 6, alpha = 0.8)
-    s.exportOnsetClicks("Erykah.wav", onsetsDeg)
     #s.exportOnsetClicks("StingNovFn.wav", onsetsDeg)

@@ -15,6 +15,10 @@ def getCSM(X, Y):
     C[C < 0] = 0
     return np.sqrt(C)
 
+def getCSML1(X, Y):
+    from scipy.spatial.distance import cdist
+    return cdist(X, Y, metric = 'cityblock')
+
 def getCSMCosine(X, Y):
     XNorm = np.sqrt(np.sum(X**2, 1))
     XNorm[XNorm == 0] = 1
@@ -57,7 +61,7 @@ def quantizeCSM(D, NLevels, retidx = False):
     else:
         d = levels[idx]
     return np.reshape(d, D.shape)
-    
+
 
 def getW(D, Kappa, Mu = 0.5):
     """
@@ -89,7 +93,7 @@ def getNNAdj(X, Kappa):
     D = getCSM(X, X)
     B = CSMToBinaryMutual(D, Kappa)
     B = sparse.csr_matrix(B)
-    return B      
+    return B
 
 def CSMToBinary(D, Kappa):
     """
