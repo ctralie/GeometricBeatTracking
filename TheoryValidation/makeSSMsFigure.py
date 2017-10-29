@@ -20,7 +20,7 @@ if __name__ == '__main__':
     NPerPeriod = 200
     amps = (1, 0.5, 1)
     
-    plt.figure(figsize=(6, 2))
+    plt.figure(figsize=(12, 4))
     AllFacs = [(1, 2), (1, 3), (1, 5), (1, 3, 9)]
     Strs = ["2 on 1", "3 on 1", "5 on 1", "9 on 3 on 1"]
     for i in range(len(AllFacs)):

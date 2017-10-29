@@ -28,8 +28,8 @@ if __name__ == '__main__':
     doAnimation = False
 
     NPerPeriod = 200
-    facs = (1, 5)
-    amps = (1, 0.5)
+    facs = (1, 2, 4)
+    amps = (2, 1, 1)
     gaussSigma = 1
     noiseSigma = 0
 
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     print "facs = %s, Ts = %s"%(facs, Ts)
 
     xR = getGaussianPulseTrain(N, Ts, amps, noiseSigma, gaussSigma)
-    Win = T*2
+    Win = 2*T
 
     YR = getSlidingWindowNoInterp(xR, Win)
     D = getSSM(YR)
@@ -64,12 +64,12 @@ if __name__ == '__main__':
     #Save SSM and persistence diagrams
     AllPDs = []
     fields = [2, 3, 5]#, 7]#, 5, 7, 11]
-    plt.figure(figsize=((len(fields)+2)*2, 2))
+    plt.figure(figsize=((len(fields)+2)*3, 3))
     plt.subplot(1, len(fields)+2, 1)
     plt.plot(np.arange(len(xR)), xR, 'b')
     plt.plot(np.arange(Win), xR[0:Win], 'r')
-    ax = plt.gca()
-    ax.set_xticks([0, 200, 400, 600])
+    #ax = plt.gca()
+    #ax.set_xticks([0, 200, 400, 600])
     plt.xlabel("Time")
     plt.title(getFacAmpStr(facs, amps))
     plt.subplot(1, len(fields)+2, 2)

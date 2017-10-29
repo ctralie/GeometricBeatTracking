@@ -6,20 +6,21 @@ sys.path.append("..")
 from TDA import *
 from TDAPlotting import *
 from PulseExperiments import *
+from Laplacian import *
 from matplotlib.patches import Polygon
 import glob
 
 PREFIX = "temp"
 
-def getPos(Ts, idx, spacing):
+def getPos(Ts, idx, spacing, dPhi = 0.5):
     T = int(Ts[-1])
     k = Ts[0]/Ts[-1]
     period = idx/T
-    ypos = spacing*(idx % T) + 8*spacing*np.sin(2*np.pi*period/(k))
+    ypos = spacing*(idx % T) + 8*spacing*np.sin(dPhi+2*np.pi*period/(k))
     if idx == Ts[0]:
         period = (idx-1)/T
-        ypos = spacing*T + 8*spacing*np.sin(2*np.pi*period/(k))
-    xpos = 4*spacing*np.cos(2*np.pi*period/(k))
+        ypos = spacing*T + 8*spacing*np.sin(dPhi+2*np.pi*period/(k))
+    xpos = 4*spacing*np.cos(dPhi+2*np.pi*period/(k))
     return (-xpos, ypos)
 
 if __name__ == '__main__':
@@ -61,19 +62,27 @@ if __name__ == '__main__':
     
     plt.savefig("%sFiltration.svg"%s, bbox_inches = 'tight')
     
-    
-    PDs = doRipsFiltrationDM(D, 1, coeff=2, relpath="../")
+    coeff = 2
+    PDs = doRipsFiltrationDM(D, 1, coeff=coeff, relpath="../")
     I = PDs[1]
     ts = np.unique(D.flatten())
-    plt.figure(figsize=(12, 4))
+    plt.figure(figsize=(20, 4))
     np.fill_diagonal(D, np.inf)
     for i in range(len(ts)):
         d = ts[i]
         
         plt.clf()
-        plt.subplot(131)
+        #plt.subplot(161)
+        #plt.imshow(D, cmap = 'afmhot', interpolation = 'nearest')
+        #lt.title("SSM")
+        
+        plt.subplot(151)
         A = np.zeros(D.shape)
         A[D <= ts[i]] = 1
+        Diag = np.diag(np.sum(A, 1))
+        L = Diag - A
+        (w, v, L) = getLaplacianEigsDense(A, 3)
+        
         plt.imshow(A, cmap = 'gray', interpolation = 'nearest')
         plt.scatter(-1*np.ones(A.shape[0]), np.arange(A.shape[1]), 20, c=C, edgecolor='none')
         plt.scatter(np.arange(A.shape[1]), -1*np.ones(A.shape[0]), 20, c=C, edgecolor='none')
@@ -81,14 +90,16 @@ if __name__ == '__main__':
         plt.ylim([A.shape[0], -2])
         plt.title("Adjacency Matrix")
         
-        plt.subplot(132)
+        plt.subplot(152)
         plotDGM(I)
         plt.plot([0, dmax], [d, d], color = 'k')
         plt.plot([d, d], [0, dmax], color = 'k')
         plt.xlim([0, dmax])
         plt.ylim([0, dmax])
+        plt.axis('equal')
+        plt.title("Persistence Diagram $\mathbb{Z}%i$"%coeff)
         
-        plt.subplot(133)
+        plt.subplot(153)
         spacing = 10
         for i1 in range(D.shape[0]):
             (x1, y1) = getPos(Ts, i1, spacing)
@@ -99,8 +110,26 @@ if __name__ == '__main__':
                 (x2, y2) = getPos(Ts, i2, spacing)
                 if D[i1, i2] <= d:
                     plt.plot([x1, x2], [y1, y2], 'k')
+        plt.title("Graph")
         plt.axis('off')
+        plt.subplot(154)
+        plt.plot(v[:, 1:3])
+        plt.axis('off')
+        plt.scatter(np.arange(A.shape[0]), 1.2*np.min(v[:, 1:3])*np.ones(A.shape[0]), 30, c=C)
+        plt.xlim([-1, A.shape[0]+1])
+        plt.title("Laplacian Eigenvectors")
+        
+        plt.subplot(155)
+        plt.plot(np.arctan2(v[:, 2], v[:, 1]))
+        plt.scatter(np.arange(A.shape[0]), (-np.pi*1.1)*np.ones(A.shape[0]), 30, c=C)
+        plt.xlim([-1, v.shape[0]])
+        ax = plt.gca()
+        ax.set_xticks([])
+        ax.set_yticks([-np.pi, 0, np.pi])
+        ax.set_yticklabels(["$-\pi$", "0", "$\pi$"])
+        plt.title("Circular Coordinates")
         plt.savefig("%s%i.png"%(PREFIX, i), bbox_inches = 'tight')
+        plt.savefig("%s%i.svg"%(PREFIX, i), bbox_inches = 'tight')
 
     filename = "%sFiltration.avi"%s
     if os.path.exists(filename):
