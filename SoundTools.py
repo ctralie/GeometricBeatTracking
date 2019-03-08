@@ -26,22 +26,9 @@ class BeatingSound(object):
         self.novFn = np.array([]) #Novelty function
         self.origNovFn = np.array([]) #Original novelty function before smoothing/denoising
 
-    def loadAudio(self, filename):
+    def loadAudio(self, filename, Fs=44100):
         self.filename = filename
-        fileparts = filename.split(".")
-        if not fileparts[-1] == "wav":
-            if os.path.exists("temp.wav"):
-                os.remove("temp.wav")
-            subprocess.call(["avconv", "-i", filename, "temp.wav"])
-            #self.XAudio, self.Fs = librosa.load("temp.wav")
-            self.Fs, self.XAudio = sio.wavfile.read("temp.wav")
-            self.XAudio = self.XAudio.T
-        else:
-            #self.XAudio, self.Fs = librosa.load(filename)
-            self.Fs, self.XAudio = sio.wavfile.read(filename)
-            self.XAudio = self.XAudio.T
-            print self.XAudio.shape
-        print "Fs = %i"%self.Fs
+        self.XAudio, self.Fs = librosa.load(filename, sr=Fs)
         self.XAudio = librosa.core.to_mono(self.XAudio)
 
     def processSpecgram(self, winSize, hopSize, pfmax):
@@ -162,7 +149,7 @@ class BeatingSound(object):
             i = self.Y.shape[0]-1
         return float(i)*self.hopSize/self.Fs
 
-    def getMadmomTempo(self):
+    def getMadmomTempo(self, do_plot=False):
         """
         Call Madmom Tempo Estimation
         :return: Array of tempos sorted in decreasing order of strength
@@ -172,7 +159,11 @@ class BeatingSound(object):
         act = RNNBeatProcessor()(self.filename)
         proc = TempoEstimationProcessor(fps=100)
         res = proc(act)
-        return res[:, 0]
+        if do_plot:
+            plt.stem(res[:, 0], res[:, 1])
+            plt.xlabel("bpm")
+            plt.ylabel("confidence")
+        return res
 
 
     ######################################################
@@ -197,7 +188,7 @@ class BeatingSound(object):
         sio.wavfile.write("%s.wav"%outprefix, self.Fs, self.XAudio)
 
     def exportOnsetClicks(self, outname, onsets):
-        print "Fs = ", self.Fs
+        print("Fs = %i"%self.Fs)
         YAudio = np.array(self.XAudio)
         blipsamples = int(np.round(0.02*self.Fs))
         blip = np.cos(2*np.pi*np.arange(blipsamples)*440.0/self.Fs)
@@ -208,7 +199,7 @@ class BeatingSound(object):
         sio.wavfile.write("temp.wav", self.Fs, YAudio)
         if os.path.exists(outname):
             os.remove(outname)
-        subprocess.call(["avconv", "-i", "temp.wav", outname])
+        subprocess.call(["ffmpeg", "-i", "temp.wav", outname])
 
     def plotOnsets(self, onsets, theta):
         #Plot a stem plot of the onsets on x-axis, and corresponding
@@ -244,41 +235,6 @@ class BeatingSound(object):
     ##         Other Signal Processing Stuff            ##
     ######################################################
 
-    #For comparison with the Quinton paper
-    #TODO: Finish this
-    def getDFTACFHadamardBlocks(self, BlockLen, BlockHop):
-        X = self.novFn
-        N = len(X)
-        #Exclude last block if it doesn't include a full BlockLen
-        #samples so that all frames are the same length
-        NBlocks = int(np.floor(1 + (N - BlockLen)/BlockHop))
-        res = np.zeros((NBlocks, BlockLen))
-        for i in range(NBlocks):
-            thisidxs = np.arange(i*BlockHop, i*BlockHop+BlockLen, dtype=np.int64)
-            x = X[thisidxs]
-            n = len(x)
-            #DFT
-            dft = np.abs(np.fft.fft(x))
-            #Autocorrelation
-            acf = np.correlate(x, x, 'full')[len(dft)-1:]
-            dft = dft[1:]
-            acf = acf[1:]
-            idx = len(x)/np.arange(1, len(x), dtype=np.float64)
-            idx = idx[::-1]
-            acf = acf[::-1]
-            idxx = np.arange(1, len(x), dtype=np.float64)
-            acfwarp = interp.spline(idx, acf, idxx)
-            plt.subplot(411)
-            plt.plot(x)
-            plt.subplot(412)
-            plt.plot(dft)
-            plt.subplot(413)
-            plt.plot(acfwarp)
-            plt.subplot(414)
-            plt.plot(dft*acfwarp)
-            plt.show()
-        print "TODO"
-
 def makeMetronomeSound(tempos, Fs, NSeconds, filename):
     """
     Save a file which auralizes a number of tempos
@@ -293,7 +249,7 @@ def makeMetronomeSound(tempos, Fs, NSeconds, filename):
     for tempo in tempos:
         #tempos are in beats per minute, convert to samples per beat
         T = 1.0/(tempo/(60.0*Fs))
-        print "T = ", T
+        print("T = %.3g"%T)
         i = 0
         while True:
             i1 = int(i*T)
@@ -318,6 +274,12 @@ if __name__ == '__main__2':
     plt.show()
 
 if __name__ == '__main__':
+    s = BeatingSound()
+    s.loadAudio("Datasets/GTzan/hiphop/hiphop.00018.au")
+    s.getMadmomTempo(do_plot=True)
+    plt.show()
+
+if __name__ == '__main__2':
     from DynProgOnsets import *
     s = BeatingSound()
     s.loadAudio("examples1/train4.wav")
@@ -326,7 +288,7 @@ if __name__ == '__main__':
     T = 85
     onsetsDeg = s.getDegaraOnsets(T)
     onsetsBock = s.getMadmomOnsets()
-    print onsetsBock
+    print(onsetsBock)
     s.exportOnsetClicks("Erykah.wav", onsetsBock)
     slope = 2*np.pi*s.hopSize*T/(60*s.Fs)
     theta = np.arange(len(s.novFn))*slope

@@ -85,14 +85,14 @@ def ppk(j, Ms, peaks, ascending=True, tol=0.05):
     fj is the level under analysis and M is the
     metrical structure candidates
     """
-    MsRet = [[] + M for M in Ms]
+    print("j = %g, Ms = %s"%(peaks[j], Ms))
+    MsRet = [M + [] for M in Ms]
     if ascending:
         cmpfn = lambda f: float(peaks[f])/peaks[j]
         nextfn = lambda i: i+1
     else:
         cmpfn = lambda f: peaks[j]/float(peaks[f])
         nextfn = lambda i: i-1
-    
     q = nextfn(j)
     # While f_{q+1}/f_q not int
     while q > 0 and q < len(peaks)-1 and not isint(cmpfn(q), tol):
@@ -100,19 +100,21 @@ def ppk(j, Ms, peaks, ascending=True, tol=0.05):
     if q < 0 or q >= len(peaks):
         return q, MsRet
     if q == 0 or q == len(peaks)-1:
-        if (not (q == j)) and isint(cmpfn(q)):
+        if (not (q == j)) and isint(cmpfn(q), tol):
+            print("Boundary: fj = %g, fq = %g"%(peaks[j], peaks[q]))
             for M in MsRet:
-                M.append(q)
+                M.append(peaks[q])
         return q, MsRet
     qnext = nextfn(q)
     if isint(cmpfn(qnext), tol): #If f_{q+1}/fj is int
         if ascending:
-            r = qnext/q
+            r = peaks[qnext]/peaks[q]
         else:
-            r = q/qnext
+            r = peaks[q]/peaks[qnext]
         if not isint(r, tol): #If f_{q+1}/f_q not int
-            Ms1 = [[] + M for M in Ms]
-            Ms2 = [[] + M for M in Ms]
+            print("Splitting: fj = %g, fq=%g, fq+1=%g"%(peaks[j], peaks[q], peaks[qnext]))
+            Ms1 = [[] + M for M in MsRet]
+            Ms2 = [[] + M for M in MsRet]
             j = q
             j, Ms1 = ppk(j, Ms1, peaks, ascending, tol)
             MsRet = MsRet + Ms1
@@ -120,12 +122,16 @@ def ppk(j, Ms, peaks, ascending=True, tol=0.05):
             j, Ms2 = ppk(j, Ms2, peaks, ascending, tol)
             MsRet = MsRet + Ms2
         else:
+            print("Case 2: fj = %g, fq=%g, fq+1=%g"%(peaks[j], peaks[q], peaks[qnext]))
             for M in MsRet:
-                M.append(q)
+                M.append(peaks[q])
+            j = q
     else:
+        print("Case 3: fj = %g, fq=%g, fq+1=%g"%(peaks[j], peaks[q], peaks[qnext]))
         for M in MsRet:
-            M.append(q)
-    return q, MsRet
+            M.append(peaks[q])
+        j = q
+    return ppk(j, MsRet, peaks, ascending, tol)
 
 def get_metrical_hierarchy(x, sr, hop=0.36, win=12, peakmin=0.005, bmin=30, bmax=800, tol=0.01, verbose=False):
     """
@@ -208,8 +214,12 @@ def test_2_1():
     get_metrical_hierarchy(x, sr=200, verbose=True)
 
 def test_ppk():
-    #j, m, peaks, jmax
-    pass
+    #j, Ms, peaks
+    peaks = np.arange(1, 6)
+    j = 0
+    j, Ms = ppk(j, [[peaks[j]]], peaks)
+    print(Ms)
 
 if __name__ == '__main__':
-    test_2_1()
+    #test_2_1()
+    test_ppk()
