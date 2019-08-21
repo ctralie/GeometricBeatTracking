@@ -1,5 +1,3 @@
-from CircularCoordinates import *
-from TDATools import *
 from SoundTools import *
 import sys
 import matplotlib.pyplot as plt
@@ -9,24 +7,6 @@ import os
 import json
 
 GENRES = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
-
-def getRhythmHierarchy(filename, cutoff = 3.0):
-    hopSize = 128
-    winSize = 2*2048
-    s = BeatingSound()
-    s.loadAudio(filename)
-    s.getLibrosaNoveltyFn(winSize, hopSize)
-    
-    W = 690
-    BlockLen = W
-    BlockHop = W/6
-    Kappas = [0.02, 0.05, 0.1, 0.15, 0.2, 0.25]
-    AllResults = getCircularCoordinatesBlocks(s, W, BlockLen, BlockHop, True, Kappas)
-    tempoScores = aggregateTempoScores(s, AllResults)
-    #Filter from top to bottom
-    I = getMorseFiltration(-tempoScores)
-    tempos = I[I[:, 1] - I[:, 0] > cutoff, 2]
-    return (tempos, tempoScores)
 
 def evalPerformance(tempos, groundTruth, eps = 0.15):
     #By default just compare to the first annotation
@@ -68,20 +48,4 @@ if __name__ == '__main__':
         for i in range(100):
             count += 1
             soundfile = "Datasets/GTzan/%s/%s.%.5i.au"%(genre, genre, i)
-            outfile = "Datasets/GTzan/%s/%s.%.5i.mat"%(genre, genre, i)
-            if SkipFiles and os.path.exists(outfile):
-                res = sio.loadmat(outfile)
-                totalPrecision += res['precision']
-                totalRecall += res['recall']
-                print "Skipping %s %i"%(genre, i)
-                continue
-            print "Doing %s %i..."%(genre, i)
-            (tempos, tempoScores) = getRhythmHierarchy(soundfile)
-            groundTruth = genreDict["%s.%.5i.wav"%(genre, i)]
-            (precision, recall, gt) = evalPerformance(tempos, groundTruth)
-            print "Precision = %g, Recall = %g"%(precision, recall)
-            totalPrecision += precision
-            totalRecall += recall
-            print "Running Precision = ", totalPrecision/float(count)
-            print "Running Recall = ", totalRecall/float(count)
-            sio.savemat(outfile, {"tempos":tempos, "tempoScores":tempoScores, "gt":gt, "precision":precision, "recall":recall})
+            # TODO: Finish this

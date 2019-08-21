@@ -154,11 +154,16 @@ class BeatingSound(object):
         Call Madmom Tempo Estimation
         :return: Array of tempos sorted in decreasing order of strength
         """
+        import time
         from madmom.features.beats import RNNBeatProcessor
         from madmom.features.tempo import TempoEstimationProcessor
+        tic = time.time()
         act = RNNBeatProcessor()(self.filename)
+        print("Elapsed Time novfn: %.3g"%(time.time()-tic))
+        tic = time.time()
         proc = TempoEstimationProcessor(fps=100)
         res = proc(act)
+        print("Elapsed time tempo: %.3g"%(time.time()-tic))
         if do_plot:
             plt.stem(res[:, 0], res[:, 1])
             plt.xlabel("bpm")
