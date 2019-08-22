@@ -21,6 +21,15 @@ import subprocess
 import os
 import time
 import librosa
+import json
+import base64
+
+def getBase64File(filename):
+    fin = open(filename, "rb")
+    b = fin.read()
+    b = base64.b64encode(b)
+    fin.close()
+    return b.decode("ASCII")
 
 class BeatingSound(object):
     """
@@ -88,7 +97,7 @@ class BeatingSound(object):
         self.S = librosa.core.stft(self.XAudio, winSize, hopSize)
         self.M = librosa.filters.mel(self.Fs, winSize, fmax = pfmax)
         arg = self.M.dot(np.abs(self.S))
-        self.X = librosa.core.logamplitude(arg)
+        self.X = librosa.core.amplitude_to_db(arg)
         diff = self.X[:, 1:] - self.X[:, 0:-1]
         diff[diff < 0] = 0
         self.novFn = np.sum(diff, 0).flatten()
@@ -141,7 +150,7 @@ class BeatingSound(object):
         and the winSize to 2048, since these are the parameters that Madmom uses
         """
         import madmom
-        log_filt_spec = madmom.audio.spectrogram.LogarithmicFilteredSpectrogram(self.filename, num_bands = 24)
+        log_filt_spec = madmom.audio.spectrogram.LogarithmicFilteredSpectrogram(self.filename, num_bands=24, sample_rate=self.Fs)
         self.novFn = madmom.features.onsets.superflux(log_filt_spec)
         #Madmom default hopsize/window size
         self.hopSize = 441
@@ -156,7 +165,7 @@ class BeatingSound(object):
         and the winSize to 2048, since these are the parameters that Madmom uses
         """
         import madmom
-        log_filt_spec = madmom.audio.spectrogram.LogarithmicFilteredSpectrogram(self.filename, num_bands = 24)
+        log_filt_spec = madmom.audio.spectrogram.LogarithmicFilteredSpectrogram(self.filename, num_bands=24, sample_rate=self.Fs)
         self.novFn = madmom.features.onsets.complex_flux(log_filt_spec)
         #Madmom default hopsize/window size
         self.hopSize = 441
@@ -238,19 +247,9 @@ class BeatingSound(object):
             plt.ylabel("confidence")
         return tempos
 
-
     ######################################################
     ##               Exporting Functions                ##
     ######################################################
-    def exportToFnViewer(self, filename, X = None):
-        if not X:
-            #By default, export novelty function
-            Fn = self.novFn
-        SampleDelays = (float(self.hopSize)/self.Fs)*np.arange(Fn.size)
-        X = np.zeros((Fn.size, 2))
-        X[:, 0] = np.arange(X.shape[0])
-        X[:, 1] = Fn
-        sio.savemat(filename, {"soundfilename":self.filename, "SampleDelays":SampleDelays, "Fs":self.Fs, "X":X})
 
     def exportOnsetClicks(self, outname, onsets):
         """
@@ -273,6 +272,31 @@ class BeatingSound(object):
         if os.path.exists(outname):
             os.remove(outname)
         subprocess.call(["ffmpeg", "-i", "temp.wav", outname])
+    
+    def exportNovFnToViewer(self, outname):
+        """
+        Export the audio and the audio novelty function to a JSON
+        file, which can be opened with a d3 viewer to visually
+        synchronize them
+        Parameters
+        ----------
+        outname: string
+            Path to which to save json file
+        """
+        if self.novFn.size == 0:
+            print("Warning: Novelty function is of length zero, so has probably not been computed yet")
+        sio.wavfile.write("temp.wav", self.Fs, self.XAudio)
+        if os.path.exists("temp.mp3"):
+            os.remove("temp.mp3")
+        subprocess.call(["ffmpeg", "-i", "temp.wav", "temp.mp3"])
+        res = {'novFn':self.novFn.tolist(), 'hopSize':self.hopSize, 'Fs':self.Fs}
+        res['audio'] = "data:audio/mp3;base64, " + getBase64File("temp.mp3")
+        os.remove("temp.wav")
+        os.remove("temp.mp3")
+        fout = open(outname, "w")
+        fout.write(json.dumps(res))
+        fout.close()
+        
 
     ######################################################
     ##               Novelty Smoothing                  ##
@@ -295,10 +319,3 @@ class BeatingSound(object):
         fidx = int(np.round((1.0/W)*N))
         f[fidx:-fidx] = 0
         self.novFn = np.abs(np.fft.ifft(f))
-
-if __name__ == '__main__':
-    s = BeatingSound()
-    s.loadAudio("Datasets/GTzan/hiphop/hiphop.00018.au")
-    s.getMadmomTempo(do_plot=True)
-    s.exportOnsetClicks("onsets.mp3", s.getMadmomOnsets())
-    plt.show()
